@@ -1,11 +1,15 @@
 <dl>
-  <% @promotions.each do |promotion|%>
+  <% if @promotions.each do |promotion|%>
     <dt>Nome: </dt>
-    <dd> <%= promotion.name %> </dd>
+    <dd> <%= link_to promotion.name, promotion %> </dd>
     <dt>Descrição: </dt>
     <dd> <%= promotion.description %> </dd> 
     <dt>Porcentagem de desconto: </dt>
     <dd> <%= number_to_percentage promotion.discount_rate, precision: 2, separator: ',' %> </dd> 
     <hr>
+  <% end.empty? %>
+    Nenhuma promoção cadastrada
   <% end %>
 </dl>
+
+<%= link_to 'Voltar', root_path %>
