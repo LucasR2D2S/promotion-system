@@ -1,0 +1,53 @@
+<%= form_with model: @promotion do |form| %>
+  <div>
+    <%= form.label :name, 'Nome' %><br>
+    <%= form.text_field :name %>
+    <% @promotion.errors.full_messages_for(:name).each do |message| %>
+      <div><%= message %></div>
+    <% end %>
+  </div>
+
+  <div>
+    <%= form.label :description, 'Descrição' %><br>
+    <%= form.text_field :description %>
+    <% @promotion.errors.full_messages_for(:description).each do |message| %>
+      <div><%= message %></div>
+    <% end %>
+  </div>
+
+  <div>
+    <%= form.label :code, 'Código' %><br>
+    <%= form.text_field :code %>
+    <% @promotion.errors.full_messages_for(:code).each do |message| %>
+      <div><%= message %></div>
+    <% end %>
+  </div>
+
+  <div>
+    <%= form.label :discount_rate, 'Desconto' %><br>
+    <%= form.text_field :discount_rate %>
+    <% @promotion.errors.full_messages_for(:discount_rate).each do |message| %>
+      <div><%= message %></div>
+    <% end %>
+  </div>
+
+  <div>
+    <%= form.label :coupon_quantity, 'Quantidade de cupons' %><br>
+    <%= form.text_field :coupon_quantity %>
+    <% @promotion.errors.full_messages_for(:coupon_quantity).each do |message| %>
+      <div><%= message %></div>
+    <% end %>
+  </div>
+
+  <div>
+    <%= form.label :expiration_date, 'Data de término' %><br>
+    <%= form.text_field :expiration_date %>
+    <% @promotion.errors.full_messages_for(:expiration_date).each do |message| %>
+      <div><%= message %></div>
+    <% end %>
+  </div>
+
+  <div>
+    <%= form.submit 'Criar promoção'%>
+  </div>
+<% end %>

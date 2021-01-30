@@ -8,8 +8,10 @@
     <dd> <%= number_to_percentage promotion.discount_rate, precision: 2, separator: ',' %> </dd> 
     <hr>
   <% end.empty? %>
-    Nenhuma promoção cadastrada
+    <div class="warning"> Nenhuma promoção cadastrada </div> 
   <% end %>
 </dl>
 
+<%= link_to 'Registrar uma promoção', new_promotion_path %>
+<hr>
 <%= link_to 'Voltar', root_path %>

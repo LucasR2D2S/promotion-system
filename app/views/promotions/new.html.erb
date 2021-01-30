@@ -1,0 +1,14 @@
+<h1>Nova Promoção</h1>
+
+<% if @promotion.errors.any? %>
+  <div> 
+    <p>Não foi possível cadastrar a promoção.</p>
+  </div>
+<% end %>
+<br>
+
+<%= render "form", promotion: @promotion %>
+
+<br>
+<hr>
+<%= link_to 'Voltar', root_path %>
