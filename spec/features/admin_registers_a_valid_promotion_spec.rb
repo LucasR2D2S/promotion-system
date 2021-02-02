@@ -12,7 +12,7 @@ feature 'Admin registers a valid promotion' do
     fill_in 'Desconto', with: ''
     fill_in 'Quantidade de cupons', with: ''
     fill_in 'Data de término', with: ''
-    click_on 'Criar promoção'
+    click_on 'Enviar'
 
     expect(Promotion.count).to eq 0
     expect(page).to have_content('Não foi possível cadastrar a promoção.')
@@ -28,7 +28,7 @@ feature 'Admin registers a valid promotion' do
     click_on 'Promoções'
     click_on 'Registrar uma promoção'
     fill_in 'Código', with: 'NATAL10'
-    click_on 'Criar promoção'
+    click_on 'Enviar'
 
     expect(page).to have_content('deve ser único')
   end

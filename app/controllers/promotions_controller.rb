@@ -27,15 +27,33 @@ class PromotionsController < ApplicationController
 
   def update
     @promotion = Promotion.find(params[:id])
-      if @promotion.update_attributes(promotion_params)
-        flash[:success] = "Object was successfully updated"
+      if @promotion.update(promotion_params)
+        flash[:success] = "Promoção foi atualizada com sucesso!"
         redirect_to @promotion
       else
-        flash[:error] = "Something went wrong"
+        flash[:error] = "Algo deu errado!"
         render 'edit'
       end
   end
-  
+
+  def destroy
+    @promotion = Promotion.find(params[:id])
+    @promotion.destroy
+
+    flash[:success] = "Promoção foi deletada com sucesso!"
+
+    redirect_to root_path
+  end
+
+  def generate_coupons
+    @promotion = Promotion.find(params[:id])
+    (1..@promotion.coupon_quantity).each do |number|
+      Coupon.create!(code: "#{@promotion.code}-#{'%04d' % number}", promotion: @promotion )
+    end
+    flash[:success] = "Cupons gerados com sucesso"
+
+    redirect_to @promotion
+  end
 
   private
     def promotion_params

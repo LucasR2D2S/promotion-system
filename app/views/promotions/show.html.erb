@@ -1,3 +1,8 @@
+<%= flash[:success] %>
+<%= flash[:error] %>
+<br>
+<%= link_to 'Voltar', promotions_path %>
+<hr>
 <h1>Promoção <%= @promotion.name %> </h1>
 
 <dt>Descrição: </dt>
@@ -14,7 +19,17 @@
 <hr>
 <dt>Quantidade: </dt>
 <dd> <%= @promotion.coupon_quantity %> </dd>
-
+<hr>
+<% @promotion.coupons.each do |coupon| %>
+  <%= coupon.code %>
+<% end %>
+<hr>
+<%= link_to 'Gerar cupons', generate_coupons_promotion_path(@promotion), method: :post %>
+<hr>
+<hr>
+<%= link_to 'Editar promoção', edit_promotion_path(@promotion) %>
+<hr>
+<%= link_to "Apagar promoção", promotion_path(@promotion), method: :delete, 
+                                data: { confirm: "Você tem certeza?" } %>
+<hr>
 <%= link_to 'Registrar uma promoção', new_promotion_path %>
-
-<%= link_to 'Voltar', promotions_path %>
