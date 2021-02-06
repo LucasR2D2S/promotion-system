@@ -1,5 +1,7 @@
 <%= flash[:success] %>
 <%= flash[:error] %>
+<p class="notice"><%= notice %></p>
+<p class="alert"><%= alert %></p>
 <br>
 <%= link_to 'Voltar', promotions_path %>
 <hr>
@@ -26,6 +28,12 @@
 <hr>
 <%= link_to 'Gerar cupons', generate_coupons_promotion_path(@promotion), method: :post %>
 <hr>
+
+<% @promotion.coupons.each do |coupon| %>
+  <%= coupon.code %>
+  <%= link_to 'Inativar', inactivate_coupon_path(coupon), method: :post %>
+<% end %>
+
 <hr>
 <%= link_to 'Editar promoção', edit_promotion_path(@promotion) %>
 <hr>
