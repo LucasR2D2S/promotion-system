@@ -1,0 +1,8 @@
+pt-BR:
+  active: 'Ativo'
+  inactive: 'Inativo'
+  promotions_link: "Promoções"
+  promotions:
+    show:
+      able: 'Habilitado'
+      disable: 'Desabilitado'

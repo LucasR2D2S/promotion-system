@@ -1,12 +1,11 @@
 class Promotion < ApplicationRecord
 
-  has_many :coupons
+  has_many :coupons, dependent: :nullify_then_purge
 
-  validates :name, presence: {message: 'não pode ficar em branco'}
+  belongs_to :user
+
+  validates :name, :code, :discount_rate, :coupon_quantity, :expiration_date,  presence: {message: 'não pode ficar em branco'}
   validates :code, uniqueness: {message: 'deve ser único'}, presence: {message: 'não pode ficar em branco'}
-  validates :discount_rate, presence: {message: 'não pode ficar em branco'}
-  validates :coupon_quantity, presence: {message: 'não pode ficar em branco'}
-  validates :expiration_date, presence: {message: 'não pode ficar em branco'}
 
   def generate_coupons!
     Coupon.transaction do

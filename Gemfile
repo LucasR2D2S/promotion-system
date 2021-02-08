@@ -6,6 +6,8 @@ ruby '2.7.0'
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
 gem 'rails', '~> 6.1.1'
 
+# Miss Hannigan
+gem 'miss_hannigan'
 # Devise
 gem 'devise'
 # Use sqlite3 as the database for Active Record

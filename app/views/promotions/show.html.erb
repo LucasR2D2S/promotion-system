@@ -1,8 +1,4 @@
-<%= flash[:success] %>
-<%= flash[:error] %>
-<p class="notice"><%= notice %></p>
-<p class="alert"><%= alert %></p>
-<br>
+
 <%= link_to 'Voltar', promotions_path %>
 <hr>
 <h1>Promoção <%= @promotion.name %> </h1>
@@ -22,16 +18,22 @@
 <dt>Quantidade: </dt>
 <dd> <%= @promotion.coupon_quantity %> </dd>
 <hr>
-<% @promotion.coupons.each do |coupon| %>
-  <%= coupon.code %>
-<% end %>
+<dt>Cadastrada por: <%= @promotion.user.email %> </dt>
+<hr>
+
 <hr>
 <%= link_to 'Gerar cupons', generate_coupons_promotion_path(@promotion), method: :post %>
 <hr>
 
 <% @promotion.coupons.each do |coupon| %>
-  <%= coupon.code %>
-  <%= link_to 'Inativar', inactivate_coupon_path(coupon), method: :post %>
+  <div id="coupon-<%= coupon.id %>">
+    <span><%= coupon.code %> (<%= t(".#{coupon.status}") %>)</span>
+    <% if coupon.able? %>
+      <%= link_to 'Desabilitar', disable_coupon_path(coupon), method: :post %>
+    <% else %>
+      <%= link_to 'Habilitar', able_coupon_path(coupon), method: :post %>
+    <% end %>
+  </div>
 <% end %>
 
 <hr>

@@ -6,7 +6,7 @@ describe Promotion do
       promotion = Promotion.new
 
       expect(promotion.valid?).to eq false
-      expect(promotion.errors.count). to eq 5
+      expect(promotion.errors.count). to eq 6
     end
     it 'attributes cannot be blank' do
       promotion = Promotion.new
@@ -24,9 +24,10 @@ describe Promotion do
     end
 
     it 'code must be uniq' do
+      user = User.create!(email: 'joao@email.com', password: '123456')
       Promotion.create!(name: 'Natal', description: 'Promoção de Natal',
                         code: 'NATAL10', discount_rate: 10,
-                        coupon_quantity: 100, expiration_date: '22/12/2033')
+                        coupon_quantity: 100, expiration_date: '22/12/2033', user: user)
       promotion = Promotion.new(code: 'NATAL10')
 
       promotion.valid?
