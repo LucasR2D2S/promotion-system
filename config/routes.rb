@@ -5,7 +5,10 @@ Rails.application.routes.draw do
   # For details on the DSL available within this file, see https://guides.rubyonrails.org/routing.html
   
   resources :promotions, only: [:index, :show, :new, :create, :edit, :update, :destroy] do
-    post 'generate_coupons', on: :member
+    member do 
+      post 'generate_coupons'
+      post 'approve'
+    end
   end
 
   resources :coupons, only: [] do

@@ -2,25 +2,35 @@
 <%= link_to 'Voltar', promotions_path %>
 <hr>
 <h1>Promoção <%= @promotion.name %> </h1>
+<dl>
+  <dt>Descrição: </dt>
+  <dd> <%= @promotion.description %> </dd>
+  <hr> 
+  <dt>Porcentagem de desconto: </dt>
+  <dd> <%= number_to_percentage @promotion.discount_rate, precision: 2, separator: ',' %> </dd>
+  <hr>
+  <dt>Codigo: </dt>
+  <dd> <%= @promotion.code %> </dd>
+  <hr>
+  <dt>Vencimento: </dt>
+  <dd> <%= @promotion.expiration_date.strftime("%d/%m/%Y") %> </dd>
+  <hr>
+  <dt>Quantidade: </dt>
+  <dd> <%= @promotion.coupon_quantity %> </dd>
+  <hr>
+  <dt>Cadastrada por: <%= @promotion.user.email %> </dt>
+  <hr>
+  <% if @promotion.approved? %>
+    <dt>Status:</dt> <dd>Aprovada</dd>
+  <% else %>
+    <dt>Status:</dt> <dd>Aguardando Aprovação</dd>
+  <% end %>
+  <hr>
+</dl>
 
-<dt>Descrição: </dt>
-<dd> <%= @promotion.description %> </dd>
-<hr> 
-<dt>Porcentagem de desconto: </dt>
-<dd> <%= number_to_percentage @promotion.discount_rate, precision: 2, separator: ',' %> </dd>
-<hr>
-<dt>Codigo: </dt>
-<dd> <%= @promotion.code %> </dd>
-<hr>
-<dt>Vencimento: </dt>
-<dd> <%= @promotion.expiration_date.strftime("%d/%m/%Y") %> </dd>
-<hr>
-<dt>Quantidade: </dt>
-<dd> <%= @promotion.coupon_quantity %> </dd>
-<hr>
-<dt>Cadastrada por: <%= @promotion.user.email %> </dt>
-<hr>
-
+<% if current_user != @promotion.user %>
+  <%= link_to 'Aprovar Promoção', approve_promotion_path, method: :post %>
+<% end %>
 <hr>
 <%= link_to 'Gerar cupons', generate_coupons_promotion_path(@promotion), method: :post %>
 <hr>

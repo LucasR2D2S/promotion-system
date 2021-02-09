@@ -2,3 +2,8 @@ pt-BR:
   promotions:
     generate_coupons:
       success: 'Cupons gerados com sucesso'
+    update:
+      success: 'Promoção foi atualizada com sucesso!'
+      error: 'Algo deu errado!'
+    destroy:
+      success: 'Promoção e seus cupons foram apagados com sucesso!'

@@ -1,7 +1,7 @@
 class Promotion < ApplicationRecord
 
-  has_many :coupons, dependent: :nullify_then_purge
-
+  has_many :coupons, dependent: :destroy
+  has_one :promotion_approval
   belongs_to :user
 
   validates :name, :code, :discount_rate, :coupon_quantity, :expiration_date,  presence: {message: 'não pode ficar em branco'}
@@ -13,5 +13,21 @@ class Promotion < ApplicationRecord
         coupons.create!(code: "#{code}-#{'%04d' % number}")
       end
     end
+  end
+
+  def approved?
+    promotion_approval
+  end
+
+  def approver
+    promotion_approval&.user
+  end
+
+  def approve!(approval_user)
+    PromotionApproval.create(promotion: self, user: approval_user)
+  end
+
+  def approved_at
+    promotion_approval&.created_at
   end
 end

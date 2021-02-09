@@ -31,11 +31,9 @@ class PromotionsController < ApplicationController
   def update
     @promotion = Promotion.find(params[:id])
       if @promotion.update(promotion_params)
-        flash[:success] = "Promoção foi atualizada com sucesso!"
-        redirect_to @promotion
+        redirect_to @promotion, notice: t('.success')
       else
-        flash[:error] = "Algo deu errado!"
-        render 'edit'
+        render 'edit', notice: t('.error')
       end
   end
 
@@ -43,15 +41,19 @@ class PromotionsController < ApplicationController
     @promotion = Promotion.find(params[:id])
     @promotion.destroy
 
-    flash[:success] = "Promoção foi deletada com sucesso!"
-
-    redirect_to root_path
+    redirect_to promotions_path, notice: t('.success')
   end
 
   def generate_coupons
-    @promotion = Promotion.find(params[:id])
-    @promotion.generate_coupons!
-    redirect_to @promotion, notice: t('.success')
+    promotion = Promotion.find(params[:id])
+    promotion.generate_coupons!
+    redirect_to promotion, notice: t('.success')
+  end
+
+  def approve
+    promotion = Promotion.find(params[:id])
+    promotion.approve!(current_user)    
+    redirect_to promotion
   end
 
   private
