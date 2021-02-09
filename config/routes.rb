@@ -15,6 +15,9 @@ Rails.application.routes.draw do
     post 'disable', on: :member
     post 'able', on: :member
   end
+
+  resources :category, only: [:index, :show, :new, :create, :edit, :update] do
+  end
   # Exemplo de uma rota customizada:
   # post '/promotions/:id/generate', to: 'promotion#generate_coupons', as: :generate_coupons
 end
