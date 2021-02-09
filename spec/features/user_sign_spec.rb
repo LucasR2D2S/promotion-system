@@ -36,4 +36,17 @@ feature 'User sign in' do
     end
 
   end
+
+  scenario 'and user sign up' do
+    visit root_path
+    click_on 'Sign up'
+    within('form') do
+      fill_in 'E-mail', with: 'lucas@gmail.com'
+      fill_in 'Senha', with: '123456'
+      fill_in 'Confirme sua senha', with: '123456'
+      click_on 'Sign up'
+    end
+
+    expect(current_path).to eq(root_path)
+  end
 end

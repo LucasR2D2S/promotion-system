@@ -8,7 +8,7 @@ class CouponsController < ApplicationController
 
   def able
     @coupon = Coupon.find(params[:id])
-    raise Error if @coupon
+    # raise Error if @coupon
     @coupon.able!
     redirect_to @coupon.promotion
   end
