@@ -11,6 +11,7 @@ class PromotionsController < ApplicationController
   
   def new
     @promotion = Promotion.new
+    @categories = Categories.all
   end
 
   def create
@@ -20,6 +21,7 @@ class PromotionsController < ApplicationController
     if @promotion.save
       redirect_to @promotion
     else
+      @categories = Categories.all
       render :new
     end
   end
@@ -56,8 +58,12 @@ class PromotionsController < ApplicationController
     redirect_to promotion
   end
 
+  def search
+    @promotions = Promotion.where('name like ?', params[:q])
+  end
+
   private
     def promotion_params
-      params.require(:promotion).permit(:name, :description, :code, :discount_rate, :coupon_quantity, :expiration_date)
+      params.require(:promotion).permit(:name, :description, :code, :discount_rate, :coupon_quantity, :expiration_date, category_ids: [])
     end
 end

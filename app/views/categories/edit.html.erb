@@ -1,0 +1,14 @@
+<h1>Editando Categoria <%= @category.name %></h1>
+
+<% if @category.errors.any? %>
+  <div> 
+    <p>Não foi possível editar a categoria.</p>
+  </div>
+<% end %>
+<br>
+
+<%= render "form", category: @category %>
+
+<br>
+<hr>
+<%= link_to 'Voltar', root_path %>

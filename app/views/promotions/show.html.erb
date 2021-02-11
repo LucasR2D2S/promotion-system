@@ -1,4 +1,3 @@
-
 <%= link_to 'Voltar', promotions_path %>
 <hr>
 <h1>Promoção <%= @promotion.name %> </h1>
@@ -28,6 +27,12 @@
   <hr>
 </dl>
 
+<h2>Categoria de Produtos</h2>
+
+<% @promotion.categories.each do |pc| %>
+  <%= pc.name %> - <%= pc.code %>
+<% end %>
+
 <% if current_user != @promotion.user %>
   <%= link_to 'Aprovar Promoção', approve_promotion_path, method: :post %>
 <% end %>
@@ -47,9 +52,9 @@
 <% end %>
 
 <hr>
+<%= link_to 'Registrar uma promoção', new_promotion_path %>
+<hr>
 <%= link_to 'Editar promoção', edit_promotion_path(@promotion) %>
 <hr>
 <%= link_to "Apagar promoção", promotion_path(@promotion), method: :delete, 
                                 data: { confirm: "Você tem certeza?" } %>
-<hr>
-<%= link_to 'Registrar uma promoção', new_promotion_path %>

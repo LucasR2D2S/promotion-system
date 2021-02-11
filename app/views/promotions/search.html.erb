@@ -1,0 +1,14 @@
+<h1>Resultados da busca</h1>
+<dl>
+  <% if @promotions.each do |promotion|%>
+    <dt>Nome: </dt>
+    <dd> <%= link_to promotion.name, promotion %> </dd>
+    <dt>Descrição: </dt>
+    <dd> <%= promotion.description %> </dd> 
+    <dt>Porcentagem de desconto: </dt>
+    <dd> <%= number_to_percentage promotion.discount_rate, precision: 2, separator: ',' %> </dd> 
+    <hr>
+  <% end.empty? %>
+    <div class="warning"> Nenhuma promoção encontrada </div> 
+  <% end %>
+</dl>

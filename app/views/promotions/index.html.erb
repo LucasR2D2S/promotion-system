@@ -1,3 +1,14 @@
+<%= link_to 'Voltar', root_path %>
+<hr>
+<h2>Pesquisar as promoções cadastradas</h2>
+<%= form_with url: search_path, method: :get do %>
+  <%= label_tag :q, 'Procurar promoção:' %>
+  <%= text_field_tag :q %>
+  <%= submit_tag 'Pesquisar' %>
+<% end %>
+<hr>
+
+<h1>Promoções</h1>
 <dl>
   <% if @promotions.each do |promotion|%>
     <dt>Nome: </dt>
@@ -13,5 +24,3 @@
 </dl>
 
 <%= link_to 'Registrar uma promoção', new_promotion_path %>
-<hr>
-<%= link_to 'Voltar', root_path %>

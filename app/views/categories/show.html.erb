@@ -1,0 +1,15 @@
+<%= link_to 'Voltar', categories_path %>
+<hr>
+<h1>Categoria <%= @category.name %> </h1>
+<h2>Código: <%= @category.code %></h2>
+<dl>
+
+</dl>
+
+<hr>
+<%= link_to 'Registrar uma categoria', new_category_path %>
+<hr>
+<%= link_to 'Editar categoria', edit_category_path(@category) %>
+<hr>
+<%= link_to "Apagar categoria", category_path(@category), method: :delete, 
+                                data: { confirm: "Você tem certeza?" } %>

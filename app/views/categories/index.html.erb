@@ -1,0 +1,17 @@
+<%= link_to 'Voltar', root_path %>
+<hr>
+<h1>Categorias de Promoções</h1>
+
+<dl>
+  <% if @categories.each do |category|%>
+    <dt>Nome: </dt>
+    <dd> <%= link_to category.name, category %> </dd>
+    <dt>Código: </dt>
+    <dd> <%= category.code %> </dd> 
+    <hr>
+  <% end.empty? %>
+    <div class="warning"> Nenhuma categoria cadastrada </div> 
+  <% end %>
+</dl>
+
+<%= link_to 'Criar nova categoria', new_category_path %>
