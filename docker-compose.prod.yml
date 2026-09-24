@@ -1,0 +1,54 @@
+# Production-like stack on your machine: the production image (precompiled
+# assets, no dev gems, non-root user) against its own MySQL. Plain http on
+# :8080, so TLS enforcement is switched off here; keep it on in a real deploy.
+#
+#   echo "SECRET_KEY_BASE=$(openssl rand -hex 64)" >> .env
+#   docker compose -f docker-compose.prod.yml up --build -d --wait
+#   open http://localhost:8080
+name: promotion-system-prod
+
+services:
+  db:
+    image: mysql:8.4
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --transaction-isolation=READ-COMMITTED
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password}
+      MYSQL_DATABASE: promotion_system_production
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  web:
+    build:
+      context: .
+      target: production
+    environment:
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in .env (openssl rand -hex 64)}
+      DB_HOST: db
+      DB_USERNAME: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password}
+      DB_NAME: promotion_system_production
+      RAILS_FORCE_SSL: "false"
+      RAILS_ASSUME_SSL: "false"
+      RAILS_LOG_LEVEL: info
+      AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:11434/v1}
+      AI_MODEL: ${AI_MODEL:-qwen2.5:7b}
+      AI_API_KEY: ${AI_API_KEY:-}
+    ports:
+      - "${PROD_HOST_PORT:-8080}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  mysql_data:

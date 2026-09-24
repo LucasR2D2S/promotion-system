@@ -22,6 +22,7 @@ Marketing teams create discount campaigns, a second person approves them, unique
 - [Data layer: MySQL and concurrency](#data-layer-mysql-and-concurrency)
 - [Testing strategy](#testing-strategy)
 - [Getting started (Docker)](#getting-started-docker)
+- [Production image](#production-image)
 - [Configuration](#configuration)
 - [Engineering log](#engineering-log)
 - [Roadmap and known limitations](#roadmap-and-known-limitations)
@@ -282,6 +283,7 @@ What makes the suite trustworthy, beyond the count:
 |---|---|
 | Tests | The full suite against a MySQL 8.4 service container, with the app eager-loaded (`CI=true`) and `zeitwerk:check`, so autoloading errors that would only surface in production fail the build |
 | Security | Brakeman (static analysis for Rails vulnerabilities; the build fails on any warning) and bundler-audit (gems with known CVEs) |
+| Production image | Builds the production image, boots it with MySQL and smoke-tests it (`/up`, login page, non-root user), so a broken Dockerfile never reaches `main` |
 
 Dependabot opens weekly PRs for outdated gems and actions, and CI validates each one.
 
@@ -340,6 +342,37 @@ MySQL is exposed on host port **3307**, so it doesn't clash with a local MySQL o
 
 > **Linux hosts:** Ollama listens on `127.0.0.1` by default. For the container to reach it through `host.docker.internal`, you may need to start Ollama with `OLLAMA_HOST=0.0.0.0`. Docker Desktop on Windows and macOS works out of the box.
 
+## Production image
+
+The same `Dockerfile` has a multi-stage production target, and it is the default when a platform runs a plain `docker build`:
+
+| | Development image | Production image |
+|---|---|---|
+| Size | 727 MB | **368 MB** |
+| Compilers (`gcc`, headers) | yes | no: gems are built in a separate `build` stage |
+| Dev/test gems | yes | no (`BUNDLE_WITHOUT=development:test`) |
+| Assets | compiled on demand | precompiled, digest-stamped, served with a 1-year cache |
+| User | root | `rails` (uid 1000) |
+| Health | none | Docker `HEALTHCHECK` on `/up` |
+
+On boot, the entrypoint runs `db:prepare` (creates the schema or applies pending migrations); demo seeds are skipped outside development. Logs go to STDOUT with request IDs, which is what any platform collects.
+
+**Run it locally** (plain http on port 8080, with its own database):
+
+```bash
+echo "SECRET_KEY_BASE=$(openssl rand -hex 64)" >> .env
+docker compose -f docker-compose.prod.yml up --build -d --wait
+open http://localhost:8080            # sign up at /users/sign_up
+docker compose -f docker-compose.prod.yml exec web bin/rails api:clients:create NAME="Loja"
+docker compose -f docker-compose.prod.yml down        # -v also deletes its data
+```
+
+**Ready to deploy** to any Docker platform (Railway, Fly.io, Kamal on a VPS, ECS…):
+
+- set `SECRET_KEY_BASE`, the `DB_*` variables (or `DATABASE_URL`) and `RAILS_HOSTS`;
+- terminate TLS at the platform or proxy: HTTPS is forced by default (`RAILS_FORCE_SSL`), with `/up` exempt so health checks work over plain http;
+- for the AI feature, point `AI_BASE_URL`, `AI_MODEL` and `AI_API_KEY` to a hosted OpenAI-compatible provider (Groq has a free tier), since Ollama isn't usually available in production. It is a configuration change, not a code change.
+
 ## Configuration
 
 All settings come from environment variables (12-factor). The defaults work locally without a `.env`.
@@ -355,6 +388,10 @@ All settings come from environment variables (12-factor). The defaults work loca
 | `DB_LOCK_WAIT_TIMEOUT` | `5` | InnoDB lock wait, in seconds |
 | `RAILS_MAX_THREADS` | `3` | Puma threads; the DB pool follows it |
 | `API_RATE_LIMIT_PER_MINUTE` | `120` | Checkout API requests per client per minute |
+| `SECRET_KEY_BASE` | *(required in production)* | Signs sessions and cookies; secret |
+| `RAILS_HOSTS` | *(any)* | Comma-separated public hostnames (DNS-rebinding protection) |
+| `RAILS_FORCE_SSL`, `RAILS_ASSUME_SSL` | `true` | Set to `false` only for a local plain-http production stack |
+| `RAILS_LOG_LEVEL` | `info` | Production log level |
 
 ---
 
@@ -370,6 +407,7 @@ This project started as a Rails 6.1 / Ruby 2.7 / SQLite app with a failing test 
 6. **Checkout API and order cancellation.** JSON endpoints over the existing services, and cancellation that frees the coupon while keeping the record, enforced by an emulated partial unique index.
 7. **Business-oriented seeds** that are deterministic and idempotent, only run in development, and whose dates stay valid over time.
 8. **An AI copywriter** with guardrails, a benchmark-driven model choice, and secret handling.
+9. **CI and a production image**: tests, security scans and a smoke-tested multi-stage image on every push.
 
 ## Roadmap and known limitations
 
@@ -377,5 +415,5 @@ This project started as a Rails 6.1 / Ruby 2.7 / SQLite app with a failing test 
 - **OpenAPI description** of the checkout API, to generate client SDKs and docs.
 - **Asynchronous AI generation.** Generation currently runs inside the request (about 6 s locally). With slower providers it belongs in a background job, with the result streamed back through Turbo Streams.
 - **Semantic checks for AI copy.** Rule-based validation catches format and policy violations, not every hallucination (for example, implying a store-wide sale when only some categories are discounted). Options: an LLM-as-judge pass, or checking the categories mentioned against the campaign data.
-- **Production image and deploy.** Add a production Docker stage (precompiled assets, non-root user) and a deploy pipeline.
+- **Public deploy.** The production image is built and smoke-tested in CI but not deployed anywhere yet. The next step is choosing a platform with managed MySQL (Railway, or Kamal on a VPS) and adding a deploy job after CI passes.
 - **Encrypted credentials.** The repository's original `credentials.yml.enc` has no matching `master.key`, so secrets come from the environment. Regenerate it with `bin/rails credentials:edit` to use Rails credentials.

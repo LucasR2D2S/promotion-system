@@ -80,3 +80,32 @@ jobs:
 
       - name: Known vulnerabilities in gems
         run: bundle exec bundler-audit check --update
+
+  production-image:
+    name: Production image (build + smoke test)
+    runs-on: ubuntu-24.04 # pinned: ubuntu-latest moves to 26.04 on 2026-10-19
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # Throwaway key: only needed to boot the smoke-test stack.
+      - name: Generate a secret key base
+        run: echo "SECRET_KEY_BASE=$(openssl rand -hex 64)" >> "$GITHUB_ENV"
+
+      - name: Build and boot the production stack
+        run: docker compose -f docker-compose.prod.yml up --build -d --wait
+
+      - name: Smoke test
+        run: |
+          curl -fsS http://localhost:8080/up
+          curl -fsS -o /dev/null http://localhost:8080/users/sign_in
+          test "$(docker compose -f docker-compose.prod.yml exec -T web id -u)" = "1000"
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.prod.yml logs web
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f docker-compose.prod.yml down -v
