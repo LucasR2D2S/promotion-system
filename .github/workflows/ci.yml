@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch/PR cancels the run in progress.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (RSpec + MySQL 8.4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ppassword --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      RAILS_ENV: test
+      CI: true # config/environments/test.rb eager-loads the app when CI is set
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USERNAME: root
+      DB_PASSWORD: password
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install MySQL client headers (for the mysql2 gem)
+        run: dpkg -s libmysqlclient-dev >/dev/null 2>&1 || (sudo apt-get update -qq && sudo apt-get install -y -qq libmysqlclient-dev)
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true # Ruby version comes from .ruby-version
+
+      - name: Check autoloading (Zeitwerk)
+        run: bin/rails zeitwerk:check
+
+      - name: Prepare database
+        run: bin/rails db:prepare
+
+      # WebMock blocks real HTTP: the AI specs never call an LLM here.
+      - name: Run test suite
+        run: bundle exec rspec
+
+  security:
+    name: Security (Brakeman + bundler-audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install MySQL client headers (for the mysql2 gem)
+        run: dpkg -s libmysqlclient-dev >/dev/null 2>&1 || (sudo apt-get update -qq && sudo apt-get install -y -qq libmysqlclient-dev)
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Static analysis for Rails vulnerabilities
+        run: bundle exec brakeman --no-pager --exit-on-warn
+
+      - name: Known vulnerabilities in gems
+        run: bundle exec bundler-audit check --update

@@ -34,6 +34,10 @@ group :development, :test do
   # Realistic fake data for db/seeds.rb and specs
   gem "faker", "~> 3.5"
   gem "factory_bot_rails", "~> 6.5"
+  # Static analysis for security vulnerabilities [https://brakemanscanner.org/]
+  gem "brakeman", require: false
+  # Audits gems for known security vulnerabilities
+  gem "bundler-audit", require: false
 end
 
 group :development do

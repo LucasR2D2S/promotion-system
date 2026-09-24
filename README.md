@@ -1,5 +1,7 @@
 # Promotion System
 
+[![CI](https://github.com/LucasR2D2S/promotion-system/actions/workflows/ci.yml/badge.svg)](https://github.com/LucasR2D2S/promotion-system/actions/workflows/ci.yml)
+
 **A campaign and coupon engine for e-commerce, with an AI copywriter that drafts the launch e-mail.**
 
 Marketing teams create discount campaigns, a second person approves them, unique coupon codes are generated in bulk, the checkout gets a safe discount quote and redeems each coupon exactly once, and a local LLM writes the e-mail that announces the campaign. Every generated e-mail is checked against the campaign's business rules before a human sees it.
@@ -215,6 +217,15 @@ What makes the suite trustworthy, beyond the count:
 - **No real network in tests.** WebMock blocks all HTTP, so AI specs never bill an API or flake on the network.
 - **Factories** (`factory_bot`) with intent-revealing traits: `:approved`, `:expired`, `:used`, `:disabled`.
 
+**Continuous integration** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs on every push and pull request:
+
+| Job | What it checks |
+|---|---|
+| Tests | The full suite against a MySQL 8.4 service container, with the app eager-loaded (`CI=true`) and `zeitwerk:check`, so autoloading errors that would only surface in production fail the build |
+| Security | Brakeman (static analysis for Rails vulnerabilities; the build fails on any warning) and bundler-audit (gems with known CVEs) |
+
+Dependabot opens weekly PRs for outdated gems and actions, and CI validates each one.
+
 ---
 
 ## Getting started (Docker)
@@ -300,5 +311,5 @@ This project started as a Rails 6.1 / Ruby 2.7 / SQLite app with a failing test 
 - **Order cancellation.** A refunded order should release its coupon, or not, depending on the business rule. Redemptions are currently final.
 - **Asynchronous AI generation.** Generation currently runs inside the request (about 6 s locally). With slower providers it belongs in a background job, with the result streamed back through Turbo Streams.
 - **Semantic checks for AI copy.** Rule-based validation catches format and policy violations, not every hallucination (for example, implying a store-wide sale when only some categories are discounted). Options: an LLM-as-judge pass, or checking the categories mentioned against the campaign data.
-- **CI and production image.** Add a CI pipeline (tests, `ai:benchmark` on demand, Brakeman) and a production Docker stage.
+- **Production image and deploy.** Add a production Docker stage (precompiled assets, non-root user) and a deploy pipeline.
 - **Encrypted credentials.** The repository's original `credentials.yml.enc` has no matching `master.key`, so secrets come from the environment. Regenerate it with `bin/rails credentials:edit` to use Rails credentials.
