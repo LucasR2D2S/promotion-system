@@ -1,24 +1,284 @@
-# README
+# Promotion System
 
-This README would normally document whatever steps are necessary to get the
-application up and running.
+**A campaign and coupon engine for e-commerce, with an AI copywriter that drafts the launch e-mail.**
 
-Things you may want to cover:
+Marketing teams create discount campaigns, a second person approves them, unique coupon codes are generated in bulk, the checkout gets a safe discount quote, and a local LLM writes the e-mail that announces the campaign. Every generated e-mail is checked against the campaign's business rules before a human sees it.
 
-* Ruby version
+`Ruby 3.4` · `Rails 8.1` · `MySQL 8.4 LTS` · `Hotwire (Turbo + importmap)` · `RSpec (126 examples)` · `Docker` · `Ollama / OpenAI-compatible LLMs`
 
-* System dependencies
+> The UI is in Brazilian Portuguese because the target market is Brazil. Code, tests and docs are in English.
 
-* Configuration
+---
 
-* Database creation
+## Table of contents
 
-* Database initialization
+- [The problem](#the-problem)
+- [What it does](#what-it-does)
+- [AI Marketing Feature](#-ai-marketing-feature)
+- [Architecture](#architecture)
+- [Data layer: MySQL and concurrency](#data-layer-mysql-and-concurrency)
+- [Testing strategy](#testing-strategy)
+- [Getting started (Docker)](#getting-started-docker)
+- [Configuration](#configuration)
+- [Engineering log](#engineering-log)
+- [Roadmap and known limitations](#roadmap-and-known-limitations)
 
-* How to run the test suite
+---
 
-* Services (job queues, cache servers, search engines, etc.)
+## The problem
 
-* Deployment instructions
+Discount campaigns sit close to revenue. Small mistakes cost money directly:
 
-* ...
+| Risk | What goes wrong | How this system handles it |
+|---|---|---|
+| **Coupon guessing** | Sequential codes (`BLACKFRIDAY-0001`, `-0002`, …) can be enumerated by anyone | Random, non-sequential codes such as `BLACKFRIDAY30-7KQ2-M9XA`, using an alphabet without look-alike characters (no `0/O`, `1/I`) |
+| **Unreviewed discounts** | One person can publish a 90% discount by mistake | Approval by a **different** user is required before any coupon gives a discount |
+| **Rounding and precision errors** | Float math and truncated columns change prices | BigDecimal end to end, half-up rounding to cents, `DECIMAL(5,2)` rates |
+| **Double generation** | Two admins clicking at the same time double the coupon supply | Row lock on the campaign; generation only tops up what is missing, so running it twice is safe |
+| **Slow campaign launches** | Every campaign needs e-mail copy, written by hand | An AI copywriter drafts it in seconds, guarded by the campaign's rules |
+
+## What it does
+
+| Flow | Who | Business rules |
+|---|---|---|
+| Create a campaign (name, % discount, dates, product categories) | Marketing manager | Discount between 0.01% and 100%; unique campaign code, case-insensitive (`black10` = `BLACK10`) |
+| Approve a campaign | Approver | The approver must be a different person from the creator |
+| Generate coupons in bulk | Marketing manager | Random unique codes, batched inserts, row lock, top-up only |
+| Enable or disable a coupon | Marketing manager | A **used** coupon is final and cannot be re-enabled |
+| Quote a discount for a cart | Checkout (service) | Coupon enabled, not used, campaign approved and not expired (valid through 23:59:59 of its last day); discount rounded half-up to cents; the total never goes below zero |
+| Draft the campaign e-mail with AI | Marketing manager | See [AI Marketing Feature](#-ai-marketing-feature) |
+
+Coupon lifecycle:
+
+```mermaid
+stateDiagram-v2
+    [*] --> able: CouponGenerationService
+    able --> disable: admin
+    disable --> able: admin
+    able --> used: redemption (see roadmap)
+    used --> [*]
+```
+
+---
+
+## 🤖 AI Marketing Feature
+
+On any campaign page, **"Gerar e-mail marketing com IA"** ("Generate marketing e-mail with AI") produces a ready-to-review e-mail: subject, preheader, body and call-to-action button.
+
+**Output from the default model (`qwen2.5:7b`), shown verbatim**, for a 30% Black Friday campaign on Electronics, Games and Home:
+
+```text
+Subject:   Black Friday: Desconto de 30% em Eletrônicos, Games e Casa!
+Preheader: Confira ofertas imperdíveis até 29/11/2026 na Promotion Store.
+Button:    Acesse a Promotion Store
+
+Estamos prontos para a Black Friday! A Promotion Store oferece desconto de 30% em toda a
+nossa seleção de produtos. Você pode aproveitar esta oportunidade nas categorias: Eletrônicos,
+Jogos e Games, Casa e Decoração. Não perca tempo! Use o cupom {{CUPOM}} no carrinho para
+aproveitar o desconto. Válido até 29/11/2026. Corra agora!
+```
+
+It passed every automatic rule: exact discount, one coupon tag, real expiration date, no placeholders. A human reviewer would still fix "toda a nossa seleção" (it implies a store-wide sale) and the made-up "Jogos e Games" category, which is exactly why the AI drafts and a person approves ([limitations](#roadmap-and-known-limitations)).
+
+`{{CUPOM}}` is a merge tag (`{{NOME}}`, the customer's first name, is also supported). At send time each customer receives **their own unique coupon** from the bulk generator, which turns a generic e-mail into trackable, per-customer offers.
+
+### Product decisions
+
+- **The AI drafts and a human decides.** Nothing is sent automatically; the page asks for review before sending. The AI speeds up the marketing team, and accountability for what customers read stays with a person.
+- **Local model by default (Ollama).** Campaign data never leaves the company's machines, each generation costs nothing, and the demo runs without an API key. Switching to Groq or OpenAI is configuration, not code: all three expose the same Chat Completions API.
+- **The model was chosen by measurement.** `bin/rails ai:benchmark` runs candidate models on the same campaigns:
+
+  | Model | Passed validation | Model calls / e-mail | Avg latency | Flagged for human review |
+  |---|---|---|---|---|
+  | `llama3.2` (3B) | 12/12 | 1.33 | 3.4 s | 2 (vague "we have everything you need") |
+  | **`qwen2.5:7b`** (default) | 11/12 | 2.0 | 5.9 s | **0** |
+
+  llama3.2 passes the automatic checks more often, but it fails in ways no rule can catch: grammar mistakes, invented dates, generic text. qwen2.5:7b fails on things the validation catches and corrects. For copy that reaches customers, text quality was worth about 2.5 s more per e-mail. Latency depends on hardware; these numbers come from the author's machine. The "flagged" column comes from keyword heuristics ("toda a loja", "frete", …) and misses paraphrases like "toda a nossa seleção" in the sample above. It helps compare models, but it does not replace a human review.
+
+### Engineering: LLM output is untrusted input
+
+A language model is a probabilistic dependency, so the service treats its output as untrusted user input:
+
+1. **Structured output.** The model must answer in a strict JSON Schema (`subject`, `preheader`, `body`, `call_to_action`).
+2. **Business-rule validation.** Every draft is checked for:
+   - the `{{CUPOM}}` merge tag exactly once;
+   - the **exact** discount ("30%", never "up to 30%": a fixed discount advertised as "up to" is misleading under Brazilian consumer law, CDC art. 37);
+   - no unfilled placeholders (`[Store name]`, `{valid_until}`) and no HTML;
+   - no invented urgency or scarcity ("limited time", "while supplies last");
+   - Portuguese only, no corrupted characters.
+3. **Self-correction loop.** A rejected draft goes back to the model with the list of problems, up to 3 attempts. If it still fails, the user gets a friendly error and never sees the bad draft.
+4. **Defensive parsing.** Invalid UTF-8 bytes from the model are scrubbed and rejected instead of crashing the request, and escaped or dangling line breaks are normalized.
+5. **No sales copy for expired campaigns.** The service refuses before calling the model.
+6. **Observability.** Every attempt emits an `attempt.ai_marketing_copy` event with the problems found. It is a hook for metrics such as rejection rate per model and per rule, and it is what the benchmark uses.
+
+Everything that fails is mapped to an actionable message. For example, a model that was never downloaded shows *"No Ollama, baixe-o com `ollama pull qwen2.5:7b`"* ("In Ollama, download it with `ollama pull qwen2.5:7b`") instead of a generic error.
+
+### API key security
+
+- **Never in code or git.** The key comes from `AI_API_KEY` (the environment: a git- and docker-ignored `.env` locally, the platform's secret manager in production) or from Rails encrypted credentials. `.env.example` documents the variables without secrets.
+- **Server-side only.** The key is never sent to the browser, never logged, and error messages carry HTTP status codes, never provider response bodies. A spec asserts that a 401 does not leak the key.
+- **Not needed at all with Ollama.** No `Authorization` header is sent when no key is configured.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart LR
+    MM[Marketing manager] --> UI
+    AP[Approver] --> UI
+    UI["Rails 8.1 · Hotwire<br/>thin controllers"] --> CGS[CouponGenerationService]
+    UI --> AIS[AiMarketingCopyGeneratorService]
+    CO["Checkout<br/>(API on roadmap)"] -.-> DAS[DiscountApplicationService]
+    CGS --> DB[(MySQL 8.4<br/>InnoDB)]
+    DAS --> DB
+    AIS --> LLM[LlmClient] --> OL["Ollama · qwen2.5:7b<br/>or Groq / OpenAI"]
+```
+
+**Business logic lives in service objects, not in controllers.** Controllers only handle HTTP (params in, redirect or render out), so the same rules can be reused by a checkout API, a background job or the console.
+
+```
+app/services/
+├── application_service.rb               # Service.call(...) convention
+├── service_result.rb                    # success?/value/error (Ruby 3.2 Data)
+├── coupon_generation_service.rb         # bulk, unique, locked, idempotent
+├── discount_application_service.rb      # read-only BigDecimal quote
+├── ai_marketing_copy_generator_service.rb
+└── llm_client.rb                        # any OpenAI-compatible API
+lib/
+├── ai_copy_benchmark.rb                 # model comparison harness
+└── tasks/ai.rake                        # bin/rails ai:benchmark
+```
+
+**Expected business failures are values, not exceptions.** An expired coupon or a campaign with nothing left to generate returns `ServiceResult.failure(:promotion_expired)`. The caller branches on `success?` and maps the error code to an i18n message or an HTTP status. Exceptions are kept for the truly unexpected.
+
+---
+
+## Data layer: MySQL and concurrency
+
+Coupons are a contention hotspot: many requests touch the same campaign at the same moment during a Black Friday. The database is configured for that workload ([`config/database.yml`](config/database.yml)):
+
+| Setting | Why |
+|---|---|
+| `transaction_isolation: READ-COMMITTED` | Avoids InnoDB gap locks, the main source of deadlocks under the default `REPEATABLE READ` when many transactions insert or lock rows of the same campaign |
+| `innodb_lock_wait_timeout: 5` | A contended row fails fast and can be retried, instead of holding a Puma thread for MySQL's default 50 s |
+| `sql_mode: TRADITIONAL` + `strict` | Invalid data raises instead of being silently truncated, which is non-negotiable for money |
+| `utf8mb4` + `utf8mb4_0900_ai_ci` | Full Unicode, and case-insensitive code lookup (`black10` finds `BLACK10`) |
+| Pool = Puma threads + 2 | One connection per thread, with headroom |
+
+Guarantees that live in the schema and the code rather than in configuration:
+
+- **A `UNIQUE` index on `coupons.code`** is the final guard against duplicate codes. Bulk inserts (`insert_all`, one statement per 1,000 rows) let MySQL skip collisions, and the service regenerates them.
+- **A row lock on the campaign** (`with_lock`) serializes coupon generation per campaign. Measured: **4 concurrent threads** asked for the same 2,000 coupons, and exactly **2,000** were created in 475 ms. One thread did the work; the others got `:nothing_to_generate`.
+- **Foreign keys are enforced**, with `dependent: :destroy` where it applies. Migrating off SQLite exposed deletes that would have failed in production.
+- **`DECIMAL(5,2)` discount rates.** The original column was `DECIMAL(10,0)`, which silently stored **12.5% as 12%**. A regression spec keeps it fixed.
+- **Single-query checkout lookup.** The coupon, its campaign and the approval are loaded with one `JOIN` (`eager_load`); a spec asserts exactly one query.
+
+---
+
+## Testing strategy
+
+**126 examples, 0 failures**, running in about 9 s against a real MySQL database.
+
+| Layer | Examples | Highlights |
+|---|---|---|
+| Services | 69 | Discount math, coupon generation, AI copy validation, HTTP client contract |
+| Features (Capybara) | 38 | End-to-end admin flows, including AI generation with a stubbed LLM |
+| Models | 15 | Validations, associations, cascading deletes under enforced foreign keys |
+| Tooling | 4 | The benchmark harness itself |
+
+What makes the suite trustworthy, beyond the count:
+
+- **Table-driven money cases** for the rounding edges: 12.49875 → 12.50, 0.005 → 0.01, a 100% discount, a zero total.
+- **A property-based check**: 200 random totals and rates must keep the money invariants (discount + final = total, whole cents, within half a cent of the exact value).
+- **Time-boundary tests** with `travel_to`: a coupon is valid at 23:59:59 on its last day and expired at 00:00 the next day.
+- **Mutation-checked.** Six typical bugs were injected into the discount service one at a time (a missing expiry check, off-by-one dates, Float math, rounding down, a wrong total, an N+1 query). Every one turns the suite red. The first run exposed a test that asserted nothing, and it was fixed.
+- **No real network in tests.** WebMock blocks all HTTP, so AI specs never bill an API or flake on the network.
+- **Factories** (`factory_bot`) with intent-revealing traits: `:approved`, `:expired`, `:used`, `:disabled`.
+
+---
+
+## Getting started (Docker)
+
+**Prerequisites:** Docker Desktop. For the AI feature, [Ollama](https://ollama.com) running on the host with the model downloaded:
+
+```bash
+ollama pull qwen2.5:7b          # 4.7 GB; lighter but weaker: llama3.2 (2 GB)
+```
+
+**Run it:**
+
+```bash
+cp .env.example .env            # optional: override defaults, add an API key
+docker compose up --build       # MySQL + Rails on http://localhost:3000
+```
+
+On first boot the entrypoint creates the database, runs the migrations and loads demo data: 5 campaigns (Black Friday, Cyber Monday, Christmas, Consumer Day, Back to School) and 50 coupons covering every state (active, used, disabled, expired campaign, awaiting approval).
+
+| Login | Password | Role |
+|---|---|---|
+| `gerente@promotion.dev` | `senha123` | Marketing manager |
+| `aprovador@promotion.dev` | `senha123` | Approver |
+
+**Everyday commands:**
+
+```bash
+# Test suite (the first run creates the test database)
+docker compose run --rm -e RAILS_ENV=test web sh -c "bin/rails db:prepare && bundle exec rspec"
+
+# Rails console
+docker compose exec web bin/rails console
+
+# Reload demo data (idempotent: safe to run again)
+docker compose exec web bin/rails db:seed
+
+# Compare LLMs on the copywriting task
+docker compose exec web bin/rails ai:benchmark MODELS=llama3.2,qwen2.5:7b N=12
+
+# Health check (for load balancers and uptime monitors)
+curl http://localhost:3000/up
+
+# Stop (add -v to also delete the MySQL data)
+docker compose down
+```
+
+MySQL is exposed on host port **3307**, so it doesn't clash with a local MySQL on 3306.
+
+> **Linux hosts:** Ollama listens on `127.0.0.1` by default. For the container to reach it through `host.docker.internal`, you may need to start Ollama with `OLLAMA_HOST=0.0.0.0`. Docker Desktop on Windows and macOS works out of the box.
+
+## Configuration
+
+All settings come from environment variables (12-factor). The defaults work locally without a `.env`.
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `AI_BASE_URL` | `http://host.docker.internal:11434/v1` | Any OpenAI-compatible endpoint (Ollama, Groq, OpenAI) |
+| `AI_MODEL` | `qwen2.5:7b` | Model ID for that endpoint |
+| `AI_API_KEY` | *(empty)* | Needed only for hosted providers; secret |
+| `AI_TIMEOUT` | `60` | Seconds to wait for the model |
+| `STORE_NAME` | `Promotion Store` | Brand used in the AI copy signature |
+| `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` | set by compose | MySQL connection |
+| `DB_LOCK_WAIT_TIMEOUT` | `5` | InnoDB lock wait, in seconds |
+| `RAILS_MAX_THREADS` | `3` | Puma threads; the DB pool follows it |
+
+---
+
+## Engineering log
+
+This project started as a Rails 6.1 / Ruby 2.7 / SQLite app with a failing test suite. The modernization was done in reviewable steps:
+
+1. **SQLite → MySQL + Docker.** The switch surfaced bugs that SQLite had hidden: foreign keys that were never enforced, a typo'd index, a truncated decimal column, and case-insensitive code uniqueness.
+2. **Green baseline before upgrading.** Fixed the pre-existing failures first (a broken controller constant, a search that never matched partial names), so the upgrade had a trustworthy safety net.
+3. **Ruby 2.7 → 3.4, Rails 6.1 → 8.1.** Both old versions were end-of-life. Webpacker, Turbolinks and Node were replaced by importmap, Turbo and Propshaft. Config was regenerated from a fresh Rails 8.1 app, `link_to method:` became real forms (`button_to`), and Devise was configured for Turbo (422/303).
+4. **Service objects** for coupon generation and discount quoting, with concurrency measured, not assumed.
+5. **Business-oriented seeds** that are deterministic and idempotent, only run in development, and whose dates stay valid over time.
+6. **An AI copywriter** with guardrails, a benchmark-driven model choice, and secret handling.
+
+## Roadmap and known limitations
+
+- **Coupon redemption.** `DiscountApplicationService` quotes a discount but does not consume the coupon. The next step is a redemption service that locks the coupon row (`SELECT … FOR UPDATE`) and marks it `used` in the same transaction as the order, so a coupon can't be spent twice concurrently.
+- **Checkout API.** Expose quote and redemption as JSON endpoints for the storefront.
+- **Asynchronous AI generation.** Generation currently runs inside the request (about 6 s locally). With slower providers it belongs in a background job, with the result streamed back through Turbo Streams.
+- **Semantic checks for AI copy.** Rule-based validation catches format and policy violations, not every hallucination (for example, implying a store-wide sale when only some categories are discounted). Options: an LLM-as-judge pass, or checking the categories mentioned against the campaign data.
+- **CI and production image.** Add a CI pipeline (tests, `ai:benchmark` on demand, Brakeman) and a production Docker stage.
+- **Encrypted credentials.** The repository's original `credentials.yml.enc` has no matching `master.key`, so secrets come from the environment. Regenerate it with `bin/rails credentials:edit` to use Rails credentials.
