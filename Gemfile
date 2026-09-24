@@ -33,6 +33,7 @@ group :development, :test do
   gem "rspec-rails", "~> 8.0"
   # Realistic fake data for db/seeds.rb and specs
   gem "faker", "~> 3.5"
+  gem "factory_bot_rails", "~> 6.5"
 end
 
 group :development do

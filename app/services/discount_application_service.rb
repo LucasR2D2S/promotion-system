@@ -20,7 +20,8 @@ class DiscountApplicationService < ApplicationService
     total = parse_amount(@cart_total)
     return failure(:invalid_cart_total) unless total
 
-    coupon = Coupon.includes(promotion: :promotion_approval).find_by(code: @coupon_code)
+    # Checkout hot path: coupon, promotion and approval in a single JOIN query.
+    coupon = Coupon.eager_load(promotion: :promotion_approval).find_by(code: @coupon_code)
     return failure(:coupon_not_found) unless coupon
 
     error = ineligibility_reason(coupon)

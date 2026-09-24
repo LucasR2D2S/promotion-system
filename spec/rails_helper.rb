@@ -32,6 +32,8 @@ rescue ActiveRecord::PendingMigrationError => e
 end
 RSpec.configure do |config|
   config.include Warden::Test::Helpers
+  config.include FactoryBot::Syntax::Methods
+  config.include ActiveSupport::Testing::TimeHelpers
   config.after(type: :feature) { Warden.test_reset! }
 
   # Remove this line if you're not using ActiveRecord or ActiveRecord fixtures
