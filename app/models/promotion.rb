@@ -10,13 +10,17 @@ class Promotion < ApplicationRecord
 
   validates :name, :code, :discount_rate, :coupon_quantity, :expiration_date,  presence: {message: 'não pode ficar em branco'}
   validates :code, uniqueness: {case_sensitive: false, message: 'deve ser único'}, presence: {message: 'não pode ficar em branco'}
+  validates :discount_rate, numericality: { greater_than: 0, less_than_or_equal_to: 100, allow_nil: true }
+  validates :coupon_quantity, numericality: { only_integer: true, greater_than: 0,
+                                              less_than_or_equal_to: 100_000, allow_nil: true }
 
-  def generate_coupons!
-    Coupon.transaction do
-      (1..coupon_quantity).each do |number|
-        coupons.create!(code: "#{code}-#{'%04d' % number}")
-      end
-    end
+  # Valid through the whole expiration day.
+  def expired?(on: Date.current)
+    expiration_date < on
+  end
+
+  def coupons_fully_generated?
+    coupons.size >= coupon_quantity
   end
 
   def approved?

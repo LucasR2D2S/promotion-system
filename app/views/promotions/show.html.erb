@@ -37,15 +37,17 @@
   <%= button_to 'Aprovar Promoção', approve_promotion_path(@promotion) %>
 <% end %>
 <hr>
-<%= button_to 'Gerar cupons', generate_coupons_promotion_path(@promotion) %>
-<hr>
+<% unless @promotion.coupons_fully_generated? %>
+  <%= button_to 'Gerar cupons', generate_coupons_promotion_path(@promotion) %>
+  <hr>
+<% end %>
 
 <% @promotion.coupons.each do |coupon| %>
   <div id="coupon-<%= coupon.id %>">
     <span><%= coupon.code %> (<%= t(".#{coupon.status}") %>)</span>
     <% if coupon.able? %>
       <%= button_to 'Desabilitar', disable_coupon_path(coupon), form: { style: 'display: inline' } %>
-    <% else %>
+    <% elsif coupon.disable? %>
       <%= button_to 'Habilitar', able_coupon_path(coupon), form: { style: 'display: inline' } %>
     <% end %>
   </div>

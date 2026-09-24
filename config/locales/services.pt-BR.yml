@@ -1,0 +1,13 @@
+pt-BR:
+  services:
+    coupon_generation:
+      errors:
+        nothing_to_generate: 'Todos os cupons desta promoção já foram gerados'
+    discount_application:
+      errors:
+        invalid_cart_total: 'Valor do carrinho inválido'
+        coupon_not_found: 'Cupom não encontrado'
+        coupon_used: 'Este cupom já foi utilizado'
+        coupon_disabled: 'Este cupom está desabilitado'
+        promotion_expired: 'A promoção deste cupom expirou'
+        promotion_not_approved: 'A promoção deste cupom ainda não foi aprovada'

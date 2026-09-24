@@ -1,7 +1,9 @@
 pt-BR:
   promotions:
     generate_coupons:
-      success: 'Cupons gerados com sucesso'
+      success:
+        one: '1 cupom gerado com sucesso'
+        other: '%{count} cupons gerados com sucesso'
     update:
       success: 'Promoção foi atualizada com sucesso!'
       error: 'Algo deu errado!'

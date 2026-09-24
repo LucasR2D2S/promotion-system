@@ -47,8 +47,13 @@ class PromotionsController < ApplicationController
 
   def generate_coupons
     promotion = Promotion.find(params[:id])
-    promotion.generate_coupons!
-    redirect_to promotion, notice: t('.success')
+    result = CouponGenerationService.call(promotion: promotion)
+
+    if result.success?
+      redirect_to promotion, notice: t('.success', count: result.value)
+    else
+      redirect_to promotion, alert: t("services.coupon_generation.errors.#{result.error}")
+    end
   end
 
   def approve

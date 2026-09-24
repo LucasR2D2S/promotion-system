@@ -45,7 +45,7 @@ describe Promotion do
                                     code: 'NATAL10', discount_rate: 10, coupon_quantity: 2,
                                     expiration_date: '22/12/2033', user: creator,
                                     categories: [category])
-      promotion.generate_coupons!
+      CouponGenerationService.call(promotion: promotion)
       promotion.approve!(approver)
 
       expect { promotion.destroy! }.to change(Promotion, :count).by(-1)
