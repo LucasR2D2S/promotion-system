@@ -34,6 +34,6 @@ feature 'Admin active coupon' do
     click_on 'Desabilitar' 
 
     coupon.reload
-    expect(page).to have_link('Habilitar')
+    expect(page).to have_button('Habilitar')
   end
 end

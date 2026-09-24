@@ -38,11 +38,11 @@ feature 'Admin inactivate coupon' do
     expect(page).to have_content('ABC0002 (Habilitado)')
 
     within("div#coupon-#{active_coupon.id}") do
-      expect(page).to have_link 'Desabilitar'
+      expect(page).to have_button 'Desabilitar'
     end
 
     within("div#coupon-#{inactive_coupon.id}") do
-      expect(page).not_to have_link 'Desabilitar'
+      expect(page).not_to have_button 'Desabilitar'
     end
   end
 end

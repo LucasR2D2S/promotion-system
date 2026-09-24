@@ -1,0 +1,13 @@
+.git
+.gitignore
+.dockerignore
+.env*
+/config/master.key
+/log/*
+/tmp/*
+/storage/*
+/public/assets
+/coverage
+/spec/examples.txt
+docker-compose*.yml
+Dockerfile*

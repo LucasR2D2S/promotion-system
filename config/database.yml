@@ -1,25 +1,49 @@
-# SQLite. Versions 3.8.0 and up are supported.
-#   gem install sqlite3
+# MySQL 8.4 LTS (InnoDB).
 #
-#   Ensure the SQLite 3 gem is defined in your Gemfile
-#   gem 'sqlite3'
+# Concurrency notes for the coupon domain:
+# - Coupons are redeemed under row-level locks (SELECT ... FOR UPDATE) and protected
+#   by a UNIQUE index on coupons.code. READ COMMITTED avoids InnoDB gap locks, which
+#   under the default REPEATABLE READ are the main source of deadlocks when many
+#   requests insert/lock coupons of the same promotion at the same time.
+# - innodb_lock_wait_timeout is lowered so a contended coupon fails fast (and can be
+#   retried) instead of holding a Puma thread for the 50s MySQL default.
+# - STRICT sql_mode: invalid data raises instead of being silently truncated —
+#   non-negotiable for monetary values.
 #
+# Every value can be overridden via ENV, so the same file works for the local
+# Docker stack, CI and production (12-factor).
 default: &default
-  adapter: sqlite3
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
-  timeout: 5000
+  adapter: mysql2
+  encoding: utf8mb4
+  collation: utf8mb4_0900_ai_ci
+  host: <%= ENV.fetch("DB_HOST") { "127.0.0.1" } %>
+  port: <%= ENV.fetch("DB_PORT") { 3306 } %>
+  username: <%= ENV.fetch("DB_USERNAME") { "root" } %>
+  password: <%= ENV.fetch("DB_PASSWORD") { "" } %>
+  # One connection per Puma thread (+ headroom for background threads).
+  max_connections: <%= ENV.fetch("DB_POOL") { ENV.fetch("RAILS_MAX_THREADS") { 3 }.to_i + 2 } %>
+  checkout_timeout: 5
+  connect_timeout: 5
+  read_timeout: 10
+  write_timeout: 10
+  strict: true
+  variables:
+    sql_mode: TRADITIONAL
+    transaction_isolation: READ-COMMITTED
+    innodb_lock_wait_timeout: <%= ENV.fetch("DB_LOCK_WAIT_TIMEOUT") { 5 } %>
 
 development:
   <<: *default
-  database: db/development.sqlite3
+  database: <%= ENV.fetch("DB_NAME") { "promotion_system_development" } %>
 
 # Warning: The database defined as "test" will be erased and
 # re-generated from your development database when you run "rake".
 # Do not set this db to the same as development or production.
 test:
   <<: *default
-  database: db/test.sqlite3
+  database: <%= ENV.fetch("DB_TEST_NAME") { "promotion_system_test" } %>
 
+# In production prefer DATABASE_URL (it is merged on top of this config).
 production:
   <<: *default
-  database: db/production.sqlite3
+  database: <%= ENV.fetch("DB_NAME") { "promotion_system_production" } %>

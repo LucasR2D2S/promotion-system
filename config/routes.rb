@@ -1,4 +1,7 @@
 Rails.application.routes.draw do
+  # Health check for load balancers / uptime monitors (200 if the app boots, 500 otherwise).
+  get "up" => "rails/health#show", as: :rails_health_check
+
   root 'home#index'
 
   devise_for :users
@@ -19,8 +22,7 @@ Rails.application.routes.draw do
     post 'able', on: :member
   end
 
-  resources :categories, only: [:index, :show, :new, :create, :edit, :update] do
-  end
+  resources :categories, only: [:index, :show, :new, :create, :edit, :update, :destroy]
   # Exemplo de uma rota customizada:
   # post '/promotions/:id/generate', to: 'promotion#generate_coupons', as: :generate_coupons
 end

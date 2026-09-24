@@ -13,7 +13,7 @@ feature 'Admin delete a promotion' do
     click_on 'Promoções'
     click_on 'Natal'
 
-    expect { click_link 'Apagar promoção' }.to change(Promotion, :count).by(-1)    
+    expect { click_button 'Apagar promoção' }.to change(Promotion, :count).by(-1)    
     expect(page).to have_content 'Promoção e seus cupons foram apagados com sucesso!'
   end
 end

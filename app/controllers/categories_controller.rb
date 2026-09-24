@@ -19,7 +19,7 @@ class CategoriesController < ApplicationController
     if @category.save
       redirect_to @category
     else
-      render :new
+      render :new, status: :unprocessable_entity
     end
   end
 
@@ -32,8 +32,15 @@ class CategoriesController < ApplicationController
       if @category.update(category_params)
         redirect_to @category, notice: t('.success')
       else
-        render 'edit', notice: t('.error')
+        render :edit, status: :unprocessable_entity
       end
+  end
+
+  def destroy
+    @category = Category.find(params[:id])
+    @category.destroy
+
+    redirect_to categories_path, notice: t('.success')
   end
 
   private

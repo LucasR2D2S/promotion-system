@@ -10,71 +10,63 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2021_02_10_235343) do
-
-  create_table "categories", force: :cascade do |t|
+ActiveRecord::Schema[8.1].define(version: 2026_09_23_000000) do
+  create_table "categories", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.string "code"
+    t.datetime "created_at", null: false
     t.string "name"
-    t.string "code"
-    t.datetime "created_at", precision: 6, null: false
-    t.datetime "updated_at", precision: 6, null: false
+    t.datetime "updated_at", null: false
   end
 
-  create_table "categories_promotions", id: false, force: :cascade do |t|
-    t.integer "category_id", null: false
-    t.integer "promotion_id", null: false
-    t.index "\"promotions_id\"", name: "index_categories_promotions_on_promotions_id"
-    t.index ["category_id"], name: "index_categories_promotions_on_category_id"
-  end
-
-  create_table "coupons", force: :cascade do |t|
+  create_table "coupons", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "code"
-    t.integer "promotion_id", null: false
-    t.datetime "created_at", precision: 6, null: false
-    t.datetime "updated_at", precision: 6, null: false
+    t.datetime "created_at", null: false
+    t.bigint "promotion_id", null: false
     t.integer "status", default: 0, null: false
+    t.datetime "updated_at", null: false
     t.index ["code"], name: "index_coupons_on_code", unique: true
     t.index ["promotion_id"], name: "index_coupons_on_promotion_id"
   end
 
-  create_table "product_category_promotions", force: :cascade do |t|
-    t.integer "category_id", null: false
-    t.integer "promotion_id", null: false
-    t.datetime "created_at", precision: 6, null: false
-    t.datetime "updated_at", precision: 6, null: false
+  create_table "product_category_promotions", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.bigint "category_id", null: false
+    t.datetime "created_at", null: false
+    t.bigint "promotion_id", null: false
+    t.datetime "updated_at", null: false
     t.index ["category_id"], name: "index_product_category_promotions_on_category_id"
     t.index ["promotion_id"], name: "index_product_category_promotions_on_promotion_id"
   end
 
-  create_table "promotion_approvals", force: :cascade do |t|
-    t.integer "promotion_id", null: false
-    t.integer "user_id", null: false
-    t.datetime "created_at", precision: 6, null: false
-    t.datetime "updated_at", precision: 6, null: false
+  create_table "promotion_approvals", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.bigint "promotion_id", null: false
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
     t.index ["promotion_id"], name: "index_promotion_approvals_on_promotion_id"
     t.index ["user_id"], name: "index_promotion_approvals_on_user_id"
   end
 
-  create_table "promotions", force: :cascade do |t|
-    t.string "name"
-    t.string "description"
+  create_table "promotions", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "code"
-    t.decimal "discount_rate"
     t.integer "coupon_quantity"
+    t.datetime "created_at", null: false
+    t.string "description"
+    t.decimal "discount_rate", precision: 10
     t.date "expiration_date"
-    t.datetime "created_at", precision: 6, null: false
-    t.datetime "updated_at", precision: 6, null: false
-    t.integer "user_id", null: false
+    t.string "name"
+    t.datetime "updated_at", null: false
+    t.bigint "user_id", null: false
     t.index ["user_id"], name: "index_promotions_on_user_id"
   end
 
-  create_table "users", force: :cascade do |t|
+  create_table "users", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.datetime "created_at", null: false
     t.string "email", default: "", null: false
     t.string "encrypted_password", default: "", null: false
+    t.datetime "remember_created_at", precision: nil
+    t.datetime "reset_password_sent_at", precision: nil
     t.string "reset_password_token"
-    t.datetime "reset_password_sent_at"
-    t.datetime "remember_created_at"
-    t.datetime "created_at", precision: 6, null: false
-    t.datetime "updated_at", precision: 6, null: false
+    t.datetime "updated_at", null: false
     t.index ["email"], name: "index_users_on_email", unique: true
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end

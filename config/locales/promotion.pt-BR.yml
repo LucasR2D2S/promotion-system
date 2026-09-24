@@ -7,3 +7,8 @@ pt-BR:
       error: 'Algo deu errado!'
     destroy:
       success: 'Promoção e seus cupons foram apagados com sucesso!'
+  categories:
+    update:
+      success: 'Categoria foi atualizada com sucesso!'
+    destroy:
+      success: 'Categoria apagada com sucesso!'

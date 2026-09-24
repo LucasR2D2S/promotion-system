@@ -13,7 +13,7 @@ feature 'User sign in' do
 
     expect(page).to have_content user.email
     expect(page).to have_content 'Login efetuado com sucesso.'
-    expect(page).to have_link 'Sair'
+    expect(page).to have_button 'Sair'
     expect(page).not_to have_link 'Entrar'
   end
 
@@ -30,7 +30,7 @@ feature 'User sign in' do
     click_on 'Sair'
 
     within('nav') do
-      expect(page).not_to have_link 'Sair'
+      expect(page).not_to have_button 'Sair'
       expect(page).not_to have_content user.email
       expect(page).to have_link 'Entrar'
     end

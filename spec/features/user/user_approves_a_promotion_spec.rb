@@ -23,7 +23,7 @@ feature 'Admin approves a promotion' do
     login_as creator, scope: :user
     visit promotion_path(promotion)
 
-    expect(page).not_to have_link 'Aprovar Promoção'
+    expect(page).not_to have_button 'Aprovar Promoção'
   end
 
   scenario 'must be another user' do
@@ -36,7 +36,7 @@ feature 'Admin approves a promotion' do
     login_as other_user, scope: :user
     visit promotion_path(promotion)
 
-    expect(page).to have_link 'Aprovar Promoção'
+    expect(page).to have_button 'Aprovar Promoção'
   end
 
   scenario 'successfully' do

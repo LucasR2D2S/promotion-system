@@ -263,7 +263,13 @@ Devise.setup do |config|
   # should add them to the navigational formats lists.
   #
   # The "*/*" below is required to match Internet Explorer requests.
-  # config.navigational_formats = ['*/*', :html]
+  config.navigational_formats = ['*/*', :html, :turbo_stream]
+
+  # ==> Hotwire/Turbo configuration
+  # Turbo only renders form responses with 4xx/5xx statuses and expects 303 after
+  # non-GET redirects; Devise keeps 200/302 for apps generated before 4.9.
+  config.responder.error_status = :unprocessable_content
+  config.responder.redirect_status = :see_other
 
   # The default HTTP method used to sign out a resource. Default is :delete.
   config.sign_out_via = :delete
@@ -295,13 +301,6 @@ Devise.setup do |config|
   # When using OmniAuth, Devise cannot automatically set OmniAuth path,
   # so you need to do it manually. For the users scope, it would be:
   # config.omniauth_path_prefix = '/my_engine/users/auth'
-
-  # ==> Turbolinks configuration
-  # If your app is using Turbolinks, Turbolinks::Controller needs to be included to make redirection work correctly:
-  #
-  # ActiveSupport.on_load(:devise_failure_app) do
-  #   include Turbolinks::Controller
-  # end
 
   # ==> Configuration for :registerable
 

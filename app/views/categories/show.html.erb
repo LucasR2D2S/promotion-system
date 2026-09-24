@@ -11,5 +11,5 @@
 <hr>
 <%= link_to 'Editar categoria', edit_category_path(@category) %>
 <hr>
-<%= link_to "Apagar categoria", category_path(@category), method: :delete, 
-                                data: { confirm: "Você tem certeza?" } %>
+<%= button_to "Apagar categoria", category_path(@category), method: :delete,
+                                form: { data: { turbo_confirm: "Você tem certeza?" } } %>
