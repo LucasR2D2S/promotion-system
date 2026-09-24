@@ -6,6 +6,11 @@ x-app-env: &app-env
   DB_USERNAME: root
   DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password}
   RAILS_MAX_THREADS: 3
+  # AI provider (see config/initializers/ai.rb). Defaults to Ollama on the host;
+  # put overrides and secrets in .env (git-ignored), never in this file.
+  AI_BASE_URL: ${AI_BASE_URL:-http://host.docker.internal:11434/v1}
+  AI_MODEL: ${AI_MODEL:-llama3.2}
+  AI_API_KEY: ${AI_API_KEY:-}
 
 services:
   db:
@@ -44,6 +49,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # built into Docker Desktop; needed on Linux
     stdin_open: true   # allows `docker attach` for the debug gem
     tty: true
 

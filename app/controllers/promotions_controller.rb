@@ -62,6 +62,19 @@ class PromotionsController < ApplicationController
     redirect_to promotion
   end
 
+  # Synchronous for simplicity: a local model answers in a few seconds. With a slower
+  # provider, move this to a job and stream the result back with Turbo Streams.
+  def marketing_copy
+    @promotion = Promotion.find(params[:id])
+    result = AiMarketingCopyGeneratorService.for_promotion(@promotion)
+
+    if result.success?
+      @copy = result.value
+    else
+      redirect_to @promotion, alert: t("services.ai_marketing_copy.errors.#{result.error}")
+    end
+  end
+
   def search
     @promotions = Promotion.where('name LIKE ?', "%#{Promotion.sanitize_sql_like(params[:q].to_s)}%")
   end

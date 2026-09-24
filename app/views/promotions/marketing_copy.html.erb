@@ -1,0 +1,23 @@
+<%= link_to 'Voltar', promotion_path(@promotion) %>
+<hr>
+<h1>E-mail marketing: <%= @promotion.name %></h1>
+<p><small>Gerado por IA. Revise antes de enviar. Os marcadores <mark>{{CUPOM}}</mark> e
+<mark>{{NOME}}</mark> são trocados pelo cupom único e pelo nome de cada cliente no envio.</small></p>
+
+<dl>
+  <dt>Assunto</dt>
+  <dd><%= @copy.subject %></dd>
+  <dt>Pré-cabeçalho</dt>
+  <dd><%= @copy.preheader %></dd>
+  <dt>Botão</dt>
+  <dd><%= @copy.call_to_action %></dd>
+</dl>
+
+<h2>Corpo</h2>
+<%# Escape the model's text first, then highlight the merge tags. %>
+<div id="marketing-copy-body">
+  <%= simple_format(h(@copy.body).gsub(/\{\{(?:CUPOM|NOME)\}\}/) { "<mark>#{it}</mark>" }, {}, sanitize_options: { tags: %w[p br mark] }) %>
+</div>
+
+<hr>
+<%= button_to 'Gerar outra versão', marketing_copy_promotion_path(@promotion), form: { data: { turbo: false } } %>

@@ -37,6 +37,13 @@
   <%= button_to 'Aprovar Promoção', approve_promotion_path(@promotion) %>
 <% end %>
 <hr>
+<% unless @promotion.expired? %>
+  <%# data-turbo=false: Turbo only accepts redirects or 4xx/5xx as form responses %>
+  <%= button_to 'Gerar e-mail marketing com IA', marketing_copy_promotion_path(@promotion),
+                form: { data: { turbo: false } } %>
+  <small>O texto é gerado por IA e pode levar alguns segundos.</small>
+  <hr>
+<% end %>
 <% unless @promotion.coupons_fully_generated? %>
   <%= button_to 'Gerar cupons', generate_coupons_promotion_path(@promotion) %>
   <hr>

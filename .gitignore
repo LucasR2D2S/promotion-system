@@ -21,6 +21,11 @@
 
 /public/assets
 
+# Local environment and secrets (API keys). Commit .env.example instead.
+/.env
+/.env.*
+!/.env.example
+
 # Ignore master key for decrypting credentials and more.
 /config/master.key
 

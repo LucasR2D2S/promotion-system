@@ -13,6 +13,7 @@ Rails.application.routes.draw do
     member do 
       post 'generate_coupons'
       post 'approve'
+      post 'marketing_copy'
       # get 'search', to:"promotions#search"
     end
   end

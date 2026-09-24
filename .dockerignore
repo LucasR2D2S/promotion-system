@@ -1,7 +1,9 @@
 .git
 .gitignore
 .dockerignore
-.env*
+.env
+.env.*
+!.env.example
 /config/master.key
 /log/*
 /tmp/*

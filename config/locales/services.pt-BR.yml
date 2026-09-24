@@ -11,3 +11,14 @@ pt-BR:
         coupon_disabled: 'Este cupom está desabilitado'
         promotion_expired: 'A promoção deste cupom expirou'
         promotion_not_approved: 'A promoção deste cupom ainda não foi aprovada'
+    ai_marketing_copy:
+      errors:
+        invalid_campaign: 'A campanha precisa de nome e de um desconto entre 0,01% e 100%'
+        campaign_expired: 'A campanha já expirou: não faz sentido divulgá-la'
+        invalid_copy: 'A IA não gerou um texto que atenda às regras da campanha. Tente novamente.'
+        timeout: 'A IA demorou demais para responder. Tente novamente.'
+        unreachable: 'Não foi possível conectar ao serviço de IA. Verifique se ele está rodando.'
+        unauthorized: 'A chave de API da IA é inválida ou não foi configurada'
+        rate_limited: 'Limite de uso da IA atingido. Aguarde um pouco e tente novamente.'
+        provider_error: 'O serviço de IA apresentou um erro. Tente novamente.'
+        invalid_response: 'O serviço de IA respondeu em um formato inesperado'
