@@ -6,16 +6,17 @@
 # LLM output is treated as untrusted input: it is validated against business rules
 # (exact discount, one {{CUPOM}} merge tag for the customer's unique coupon, no
 # unfilled placeholders, plain pt-BR text). Invalid copy is sent back to the model
-# with the list of problems for one correction round before giving up.
+# with the list of problems, up to MAX_ATTEMPTS, before giving up.
 class AiMarketingCopyGeneratorService < ApplicationService
   Copy = Data.define(:subject, :preheader, :body, :call_to_action)
 
+  ATTEMPT_EVENT = "attempt.ai_marketing_copy".freeze
   COUPON_TAG = "{{CUPOM}}".freeze
   NAME_TAG = "{{NOME}}".freeze
   # First try + correction rounds. Cheap with a local model; tune down for paid APIs.
   MAX_ATTEMPTS = 3
   # Urgency the campaign data doesn't back up is false advertising (CDC, art. 37).
-  INVENTED_URGENCY = /tempo limitado|por pouco tempo|só hoje|apenas hoje|últimas horas|últimas unidades/i
+  INVENTED_URGENCY = /tempo limitado|por pouco tempo|só hoje|apenas hoje|últimas (horas|unidades)|antes que acabe|enquanto durar/i
 
   SCHEMA = {
     type: "object",
@@ -51,10 +52,12 @@ class AiMarketingCopyGeneratorService < ApplicationService
 
     messages = [{ role: "system", content: system_prompt }, { role: "user", content: campaign_prompt }]
 
-    MAX_ATTEMPTS.times do
+    MAX_ATTEMPTS.times do |attempt|
       answer = @client.chat_json(messages:, schema: SCHEMA, schema_name: "marketing_email")
       copy = normalize(answer)
       problems = problems_in(copy)
+      # Hook for metrics (rejection rate per model/rule) and for bin/rails ai:benchmark.
+      ActiveSupport::Notifications.instrument(ATTEMPT_EVENT, attempt: attempt + 1, problems:, copy:)
       return success(copy) if problems.empty?
 
       Rails.logger.info("[AiMarketingCopy] rejected copy: #{problems.join('; ')}")
@@ -114,7 +117,7 @@ class AiMarketingCopyGeneratorService < ApplicationService
   # rejected by the validation) and escaped newlines ("\\n") inside the strings.
   def normalize(answer)
     fields = SCHEMA[:required].to_h do |key|
-      text = answer[key].to_s.dup.force_encoding(Encoding::UTF_8).scrub("�")
+      text = answer[key].to_s.dup.force_encoding(Encoding::UTF_8).scrub("\uFFFD")
       text = text.gsub("\\n", "\n").gsub(/\\+$/, "") # escaped or dangling line breaks
       [key.to_sym, text.gsub(/[ \t]+$/, "").gsub(/^[ \t]+/, "").gsub(/\n{3,}/, "\n\n").strip]
     end

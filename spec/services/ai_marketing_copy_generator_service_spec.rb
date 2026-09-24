@@ -62,6 +62,7 @@ RSpec.describe AiMarketingCopyGeneratorService do
       'with a [placeholder] to fill in' => [{ 'body' => '30% OFF na [Nome da Loja]. Use {{CUPOM}}.' }, 'colchetes'],
       'with HTML' => [{ 'body' => '<p>30% OFF. Use {{CUPOM}}.</p>' }, 'sem HTML'],
       'with invented urgency' => [{ 'body' => '30% OFF por tempo limitado! Use {{CUPOM}}.' }, 'não invente urgência'],
+      'with invented scarcity' => [{ 'body' => '30% OFF antes que acabem! Use {{CUPOM}}.' }, 'não invente urgência'],
       'with sentences in English' => [{ 'body' => '30% OFF. Shop now with {{CUPOM}}!' }, 'português do Brasil'],
       'with an empty field' => [{ 'preheader' => '  ' }, 'preheader está vazio'],
       'with a subject over 80 characters' => [{ 'subject' => "30% OFF #{'a' * 80}" }, 'assunto passa de 80']

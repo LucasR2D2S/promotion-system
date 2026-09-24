@@ -58,6 +58,7 @@ RSpec.describe LlmClient do
   {
     'HTTP 401' => [->(stub) { stub.to_return(status: 401) }, :unauthorized],
     'HTTP 403' => [->(stub) { stub.to_return(status: 403) }, :unauthorized],
+    'HTTP 404 (model not pulled)' => [->(stub) { stub.to_return(status: 404) }, :model_not_found],
     'HTTP 429' => [->(stub) { stub.to_return(status: 429) }, :rate_limited],
     'HTTP 500' => [->(stub) { stub.to_return(status: 500) }, :provider_error],
     'a timeout' => [->(stub) { stub.to_timeout }, :timeout],

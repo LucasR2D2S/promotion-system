@@ -2,7 +2,7 @@
 # so switching providers is configuration, not code:
 #
 #   Ollama (default: local, free, data never leaves the machine — no key needed)
-#     AI_BASE_URL=http://localhost:11434/v1  AI_MODEL=llama3.2
+#     AI_BASE_URL=http://localhost:11434/v1  AI_MODEL=qwen2.5:7b   (ollama pull qwen2.5:7b)
 #   Groq
 #     AI_BASE_URL=https://api.groq.com/openai/v1  AI_MODEL=<model>  AI_API_KEY=gsk_...
 #   OpenAI
@@ -14,7 +14,8 @@
 # It is only read server-side and never logged or sent to the browser.
 Rails.application.config.x.ai.tap do |ai|
   ai.base_url = ENV.fetch("AI_BASE_URL", "http://localhost:11434/v1")
-  ai.model = ENV.fetch("AI_MODEL", "llama3.2")
+  # qwen2.5:7b beat llama3.2 (3B) on copy quality: see `bin/rails ai:benchmark`.
+  ai.model = ENV.fetch("AI_MODEL", "qwen2.5:7b")
   ai.api_key = ENV["AI_API_KEY"].presence || Rails.application.credentials.dig(:ai, :api_key)
   # Local models can take a while on the first call (loading into memory).
   ai.timeout = ENV.fetch("AI_TIMEOUT", 60).to_i

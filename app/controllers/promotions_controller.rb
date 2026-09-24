@@ -71,7 +71,8 @@ class PromotionsController < ApplicationController
     if result.success?
       @copy = result.value
     else
-      redirect_to @promotion, alert: t("services.ai_marketing_copy.errors.#{result.error}")
+      redirect_to @promotion, alert: t("services.ai_marketing_copy.errors.#{result.error}",
+                                       model: Rails.configuration.x.ai.model)
     end
   end
 

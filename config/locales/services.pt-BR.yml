@@ -19,6 +19,7 @@ pt-BR:
         timeout: 'A IA demorou demais para responder. Tente novamente.'
         unreachable: 'Não foi possível conectar ao serviço de IA. Verifique se ele está rodando.'
         unauthorized: 'A chave de API da IA é inválida ou não foi configurada'
+        model_not_found: 'O modelo de IA configurado não foi encontrado. No Ollama, baixe-o com "ollama pull %{model}".'
         rate_limited: 'Limite de uso da IA atingido. Aguarde um pouco e tente novamente.'
         provider_error: 'O serviço de IA apresentou um erro. Tente novamente.'
         invalid_response: 'O serviço de IA respondeu em um formato inesperado'

@@ -56,6 +56,7 @@ class LlmClient
     case response
     when Net::HTTPSuccess then JSON.parse(response.body)
     when Net::HTTPUnauthorized, Net::HTTPForbidden then raise Error.new(:unauthorized, "LLM rejected the API key")
+    when Net::HTTPNotFound then raise Error.new(:model_not_found, "model #{@model} not found at #{@base_url}")
     when Net::HTTPTooManyRequests then raise Error.new(:rate_limited, "LLM rate limit reached")
     else raise Error.new(:provider_error, "LLM answered HTTP #{response.code}")
     end
