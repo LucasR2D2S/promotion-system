@@ -92,6 +92,20 @@ ActiveRecord::Base.transaction do
     promotion.coupons.update_all(status: Coupon.statuses[:able])
     Coupon.where(id: used_ids).update_all(status: Coupon.statuses[:used])
     Coupon.where(id: disabled_ids).update_all(status: Coupon.statuses[:disable])
+
+    # A used coupon always comes with the order that consumed it (financial record),
+    # redeemed up to 10 days before the campaign ended (or before today).
+    Coupon.where(id: used_ids).includes(:redemption).find_each do |coupon|
+      next if coupon.redemption
+
+      total = BigDecimal(Faker::Number.between(from: 8_000, to: 150_000)) / 100 # R$ 80,00 .. R$ 1.500,00
+      discount = (total * promotion.discount_rate / 100).round(2, :half_up)
+      coupon.create_redemption!(
+        order_reference: "PED-#{100_000 + coupon.id}", original_total: total, discount_amount: discount,
+        final_total: total - discount,
+        redeemed_at: [promotion.expiration_date, today].min.beginning_of_day - Faker::Number.between(from: 1, to: 240).hours
+      )
+    end
   end
 end
 

@@ -10,12 +10,25 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_24_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_25_000000) do
   create_table "categories", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "code"
     t.datetime "created_at", null: false
     t.string "name"
     t.datetime "updated_at", null: false
+  end
+
+  create_table "coupon_redemptions", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.bigint "coupon_id", null: false
+    t.datetime "created_at", null: false
+    t.decimal "discount_amount", precision: 12, scale: 2, null: false
+    t.decimal "final_total", precision: 12, scale: 2, null: false
+    t.string "order_reference", limit: 64, null: false
+    t.decimal "original_total", precision: 12, scale: 2, null: false
+    t.datetime "redeemed_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["coupon_id"], name: "index_coupon_redemptions_on_coupon_id", unique: true
+    t.index ["order_reference"], name: "index_coupon_redemptions_on_order_reference", unique: true
   end
 
   create_table "coupons", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
@@ -71,6 +84,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_000000) do
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
+  add_foreign_key "coupon_redemptions", "coupons"
   add_foreign_key "coupons", "promotions"
   add_foreign_key "product_category_promotions", "categories"
   add_foreign_key "product_category_promotions", "promotions"

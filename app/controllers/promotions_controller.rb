@@ -40,9 +40,12 @@ class PromotionsController < ApplicationController
 
   def destroy
     @promotion = Promotion.find(params[:id])
-    @promotion.destroy
 
-    redirect_to promotions_path, notice: t('.success')
+    if @promotion.destroy
+      redirect_to promotions_path, notice: t('.success')
+    else
+      redirect_to @promotion, alert: @promotion.errors.full_messages.to_sentence
+    end
   end
 
   def generate_coupons

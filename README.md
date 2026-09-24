@@ -2,9 +2,9 @@
 
 **A campaign and coupon engine for e-commerce, with an AI copywriter that drafts the launch e-mail.**
 
-Marketing teams create discount campaigns, a second person approves them, unique coupon codes are generated in bulk, the checkout gets a safe discount quote, and a local LLM writes the e-mail that announces the campaign. Every generated e-mail is checked against the campaign's business rules before a human sees it.
+Marketing teams create discount campaigns, a second person approves them, unique coupon codes are generated in bulk, the checkout gets a safe discount quote and redeems each coupon exactly once, and a local LLM writes the e-mail that announces the campaign. Every generated e-mail is checked against the campaign's business rules before a human sees it.
 
-`Ruby 3.4` · `Rails 8.1` · `MySQL 8.4 LTS` · `Hotwire (Turbo + importmap)` · `RSpec (126 examples)` · `Docker` · `Ollama / OpenAI-compatible LLMs`
+`Ruby 3.4` · `Rails 8.1` · `MySQL 8.4 LTS` · `Hotwire (Turbo + importmap)` · `RSpec (146 examples)` · `Docker` · `Ollama / OpenAI-compatible LLMs`
 
 > The UI is in Brazilian Portuguese because the target market is Brazil. Code, tests and docs are in English.
 
@@ -35,6 +35,7 @@ Discount campaigns sit close to revenue. Small mistakes cost money directly:
 | **Unreviewed discounts** | One person can publish a 90% discount by mistake | Approval by a **different** user is required before any coupon gives a discount |
 | **Rounding and precision errors** | Float math and truncated columns change prices | BigDecimal end to end, half-up rounding to cents, `DECIMAL(5,2)` rates |
 | **Double generation** | Two admins clicking at the same time double the coupon supply | Row lock on the campaign; generation only tops up what is missing, so running it twice is safe |
+| **Double spending** | Two checkouts use the same coupon at the same instant | Row lock on the coupon plus a unique index on its redemption; idempotent retries; one coupon per order |
 | **Slow campaign launches** | Every campaign needs e-mail copy, written by hand | An AI copywriter drafts it in seconds, guarded by the campaign's rules |
 
 ## What it does
@@ -46,6 +47,8 @@ Discount campaigns sit close to revenue. Small mistakes cost money directly:
 | Generate coupons in bulk | Marketing manager | Random unique codes, batched inserts, row lock, top-up only |
 | Enable or disable a coupon | Marketing manager | A **used** coupon is final and cannot be re-enabled |
 | Quote a discount for a cart | Checkout (service) | Coupon enabled, not used, campaign approved and not expired (valid through 23:59:59 of its last day); discount rounded half-up to cents; the total never goes below zero |
+| Redeem a coupon for an order | Checkout (service) | Same rules as the quote, checked **under a row lock**; each coupon pays for exactly one order; one coupon per order; a retry of the same order returns the original redemption |
+| Delete a campaign | Marketing manager | Blocked once any of its coupons paid for an order (redemptions are financial records) |
 | Draft the campaign e-mail with AI | Marketing manager | See [AI Marketing Feature](#-ai-marketing-feature) |
 
 Coupon lifecycle:
@@ -55,7 +58,7 @@ stateDiagram-v2
     [*] --> able: CouponGenerationService
     able --> disable: admin
     disable --> able: admin
-    able --> used: redemption (see roadmap)
+    able --> used: CouponRedemptionService
     used --> [*]
 ```
 
@@ -130,8 +133,11 @@ flowchart LR
     UI["Rails 8.1 · Hotwire<br/>thin controllers"] --> CGS[CouponGenerationService]
     UI --> AIS[AiMarketingCopyGeneratorService]
     CO["Checkout<br/>(API on roadmap)"] -.-> DAS[DiscountApplicationService]
+    CO -.-> CRS[CouponRedemptionService]
+    CRS --> DAS
     CGS --> DB[(MySQL 8.4<br/>InnoDB)]
     DAS --> DB
+    CRS --> DB
     AIS --> LLM[LlmClient] --> OL["Ollama · qwen2.5:7b<br/>or Groq / OpenAI"]
 ```
 
@@ -143,6 +149,7 @@ app/services/
 ├── service_result.rb                    # success?/value/error (Ruby 3.2 Data)
 ├── coupon_generation_service.rb         # bulk, unique, locked, idempotent
 ├── discount_application_service.rb      # read-only BigDecimal quote
+├── coupon_redemption_service.rb         # locked, idempotent, exactly-once use
 ├── ai_marketing_copy_generator_service.rb
 └── llm_client.rb                        # any OpenAI-compatible API
 lib/
@@ -170,6 +177,17 @@ Guarantees that live in the schema and the code rather than in configuration:
 
 - **A `UNIQUE` index on `coupons.code`** is the final guard against duplicate codes. Bulk inserts (`insert_all`, one statement per 1,000 rows) let MySQL skip collisions, and the service regenerates them.
 - **A row lock on the campaign** (`with_lock`) serializes coupon generation per campaign. Measured: **4 concurrent threads** asked for the same 2,000 coupons, and exactly **2,000** were created in 475 ms. One thread did the work; the others got `:nothing_to_generate`.
+- **Coupon redemption locks only the coupon row** (`SELECT … FOR UPDATE`) and re-checks every rule *after* the lock is held. Checking first and writing later is the window through which one coupon would pay for two orders. The campaign row is never locked, so a Black Friday's coupons are redeemed in parallel (a spec proves that a lock on one coupon doesn't delay another). If the row stays busy past the lock timeout, the checkout gets a retryable `:coupon_busy`.
+- **Two independent guards against double spending, verified by removing each one** against real MySQL threads racing to redeem the same coupon:
+
+  | Row lock | Unique index on `coupon_redemptions.coupon_id` | Result |
+  |---|---|---|
+  | ✅ | ✅ | exactly one redemption (shipped) |
+  | ❌ | ✅ | still exactly one: the index rejects the second insert |
+  | ✅ | ❌ | still exactly one: the lock serializes the checkouts |
+  | ❌ | ❌ | **the same coupon paid for several orders in 3 out of 3 runs** |
+
+- **Idempotent redemption.** Checkouts retry on timeouts. The same coupon and order returns the original redemption (`replayed: true`, original amounts) instead of a false "coupon already used" for an order that went through.
 - **Foreign keys are enforced**, with `dependent: :destroy` where it applies. Migrating off SQLite exposed deletes that would have failed in production.
 - **`DECIMAL(5,2)` discount rates.** The original column was `DECIMAL(10,0)`, which silently stored **12.5% as 12%**. A regression spec keeps it fixed.
 - **Single-query checkout lookup.** The coupon, its campaign and the approval are loaded with one `JOIN` (`eager_load`); a spec asserts exactly one query.
@@ -178,13 +196,13 @@ Guarantees that live in the schema and the code rather than in configuration:
 
 ## Testing strategy
 
-**126 examples, 0 failures**, running in about 9 s against a real MySQL database.
+**146 examples, 0 failures**, running in about 15 s against a real MySQL database.
 
 | Layer | Examples | Highlights |
 |---|---|---|
-| Services | 69 | Discount math, coupon generation, AI copy validation, HTTP client contract |
-| Features (Capybara) | 38 | End-to-end admin flows, including AI generation with a stubbed LLM |
-| Models | 15 | Validations, associations, cascading deletes under enforced foreign keys |
+| Services | 87 | Discount math, coupon generation and redemption (including real multi-threaded races), AI copy validation, HTTP client contract |
+| Features (Capybara) | 39 | End-to-end admin flows, including AI generation with a stubbed LLM |
+| Models | 16 | Validations, associations, cascading deletes under enforced foreign keys, protection of redeemed coupons |
 | Tooling | 4 | The benchmark harness itself |
 
 What makes the suite trustworthy, beyond the count:
@@ -193,6 +211,7 @@ What makes the suite trustworthy, beyond the count:
 - **A property-based check**: 200 random totals and rates must keep the money invariants (discount + final = total, whole cents, within half a cent of the exact value).
 - **Time-boundary tests** with `travel_to`: a coupon is valid at 23:59:59 on its last day and expired at 00:00 the next day.
 - **Mutation-checked.** Six typical bugs were injected into the discount service one at a time (a missing expiry check, off-by-one dates, Float math, rounding down, a wrong total, an N+1 query). Every one turns the suite red. The first run exposed a test that asserted nothing, and it was fixed.
+- **Real concurrency, not simulated.** The redemption races run outside the test transaction, with one connection and one transaction per thread, all released at the same instant. Removing both the lock and the unique index makes them fail (see the table in [Data layer](#data-layer-mysql-and-concurrency)).
 - **No real network in tests.** WebMock blocks all HTTP, so AI specs never bill an API or flake on the network.
 - **Factories** (`factory_bot`) with intent-revealing traits: `:approved`, `:expired`, `:used`, `:disabled`.
 
@@ -213,7 +232,7 @@ cp .env.example .env            # optional: override defaults, add an API key
 docker compose up --build       # MySQL + Rails on http://localhost:3000
 ```
 
-On first boot the entrypoint creates the database, runs the migrations and loads demo data: 5 campaigns (Black Friday, Cyber Monday, Christmas, Consumer Day, Back to School) and 50 coupons covering every state (active, used, disabled, expired campaign, awaiting approval).
+On first boot the entrypoint creates the database, runs the migrations and loads demo data: 5 campaigns (Black Friday, Cyber Monday, Christmas, Consumer Day, Back to School) and 50 coupons covering every state (active, used, disabled, expired campaign, awaiting approval). Every used coupon comes with the order that redeemed it.
 
 | Login | Password | Role |
 |---|---|---|
@@ -271,13 +290,14 @@ This project started as a Rails 6.1 / Ruby 2.7 / SQLite app with a failing test 
 2. **Green baseline before upgrading.** Fixed the pre-existing failures first (a broken controller constant, a search that never matched partial names), so the upgrade had a trustworthy safety net.
 3. **Ruby 2.7 → 3.4, Rails 6.1 → 8.1.** Both old versions were end-of-life. Webpacker, Turbolinks and Node were replaced by importmap, Turbo and Propshaft. Config was regenerated from a fresh Rails 8.1 app, `link_to method:` became real forms (`button_to`), and Devise was configured for Turbo (422/303).
 4. **Service objects** for coupon generation and discount quoting, with concurrency measured, not assumed.
-5. **Business-oriented seeds** that are deterministic and idempotent, only run in development, and whose dates stay valid over time.
-6. **An AI copywriter** with guardrails, a benchmark-driven model choice, and secret handling.
+5. **Exactly-once coupon redemption** with a row lock, idempotent retries and a financial record per order, verified by removing each guard.
+6. **Business-oriented seeds** that are deterministic and idempotent, only run in development, and whose dates stay valid over time.
+7. **An AI copywriter** with guardrails, a benchmark-driven model choice, and secret handling.
 
 ## Roadmap and known limitations
 
-- **Coupon redemption.** `DiscountApplicationService` quotes a discount but does not consume the coupon. The next step is a redemption service that locks the coupon row (`SELECT … FOR UPDATE`) and marks it `used` in the same transaction as the order, so a coupon can't be spent twice concurrently.
-- **Checkout API.** Expose quote and redemption as JSON endpoints for the storefront.
+- **Checkout API.** Quote and redemption exist as services. The next step is exposing them as JSON endpoints for the storefront, with token authentication and the order reference as the idempotency key.
+- **Order cancellation.** A refunded order should release its coupon, or not, depending on the business rule. Redemptions are currently final.
 - **Asynchronous AI generation.** Generation currently runs inside the request (about 6 s locally). With slower providers it belongs in a background job, with the result streamed back through Turbo Streams.
 - **Semantic checks for AI copy.** Rule-based validation catches format and policy violations, not every hallucination (for example, implying a store-wide sale when only some categories are discounted). Options: an LLM-as-judge pass, or checking the categories mentioned against the campaign data.
 - **CI and production image.** Add a CI pipeline (tests, `ai:benchmark` on demand, Brakeman) and a production Docker stage.

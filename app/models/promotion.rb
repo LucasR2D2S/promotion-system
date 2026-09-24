@@ -8,6 +8,9 @@ class Promotion < ApplicationRecord
 
   belongs_to :user
 
+  # Redeemed coupons are financial records (orders already paid with them).
+  before_destroy :ensure_no_redeemed_coupons, prepend: true
+
   validates :name, :code, :discount_rate, :coupon_quantity, :expiration_date,  presence: {message: 'não pode ficar em branco'}
   validates :code, uniqueness: {case_sensitive: false, message: 'deve ser único'}, presence: {message: 'não pode ficar em branco'}
   validates :discount_rate, numericality: { greater_than: 0, less_than_or_equal_to: 100, allow_nil: true }
@@ -37,5 +40,14 @@ class Promotion < ApplicationRecord
 
   def approved_at
     promotion_approval&.created_at
+  end
+
+  private
+
+  def ensure_no_redeemed_coupons
+    return unless coupons.used.exists?
+
+    errors.add(:base, :has_redeemed_coupons)
+    throw :abort
   end
 end

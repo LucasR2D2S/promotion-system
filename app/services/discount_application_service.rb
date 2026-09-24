@@ -7,12 +7,16 @@
 #
 # Money is handled as BigDecimal end to end (never Float); the discount is
 # rounded half-up to cents and can never make the total negative.
+#
+# Pass `coupon:` instead of `coupon_code:` when the caller already loaded the row
+# (CouponRedemptionService passes the coupon it holds a lock on).
 class DiscountApplicationService < ApplicationService
   Quote = Data.define(:original_total, :discount_amount, :final_total, :coupon)
 
-  def initialize(cart_total:, coupon_code:, on: Date.current)
+  def initialize(cart_total:, coupon_code: nil, coupon: nil, on: Date.current)
     @cart_total = cart_total
     @coupon_code = coupon_code.to_s.strip
+    @coupon = coupon
     @on = on
   end
 
@@ -21,7 +25,7 @@ class DiscountApplicationService < ApplicationService
     return failure(:invalid_cart_total) unless total
 
     # Checkout hot path: coupon, promotion and approval in a single JOIN query.
-    coupon = Coupon.eager_load(promotion: :promotion_approval).find_by(code: @coupon_code)
+    coupon = @coupon || Coupon.eager_load(promotion: :promotion_approval).find_by(code: @coupon_code)
     return failure(:coupon_not_found) unless coupon
 
     error = ineligibility_reason(coupon)

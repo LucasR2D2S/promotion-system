@@ -23,3 +23,9 @@ pt-BR:
         description: "Descrição"
       coupon:
         code: Código
+    errors:
+      models:
+        promotion:
+          attributes:
+            base:
+              has_redeemed_coupons: "A promoção tem cupons já utilizados em pedidos e não pode ser apagada"

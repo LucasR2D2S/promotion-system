@@ -56,6 +56,19 @@ describe Promotion do
     end
   end
 
+  context '#destroy with redeemed coupons' do
+    it 'is blocked: redemptions are financial records of paid orders' do
+      coupon = create(:coupon)
+      CouponRedemptionService.call(coupon_code: coupon.code, cart_total: '100.00', order_reference: 'PED-1')
+      promotion = coupon.promotion
+
+      expect(promotion.destroy).to be false
+      expect(promotion.errors[:base]).to include('A promoção tem cupons já utilizados em pedidos e não pode ser apagada')
+      expect(Promotion.exists?(promotion.id)).to be true
+      expect(CouponRedemption.count).to eq 1
+    end
+  end
+
   context '#approve!' do
 
     it 'should generate a PromotionApproval object' do
