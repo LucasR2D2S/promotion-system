@@ -63,6 +63,11 @@ ActiveRecord::Base.transaction do
     User.find_or_create_by!(email:) { |u| u.password = password }
   end
 
+  # Checkout API client for trying the API locally (fixed token, development only).
+  ApiClient.find_or_create_by!(name: "Loja virtual (dev)") do |client|
+    client.token_digest = ApiClient.digest("psk_dev_local_only")
+  end
+
   categories = category_names.to_h do |code, name|
     [code, Category.find_or_create_by!(code:) { |c| c.name = name }]
   end
@@ -95,12 +100,12 @@ ActiveRecord::Base.transaction do
 
     # A used coupon always comes with the order that consumed it (financial record),
     # redeemed up to 10 days before the campaign ended (or before today).
-    Coupon.where(id: used_ids).includes(:redemption).find_each do |coupon|
-      next if coupon.redemption
+    Coupon.where(id: used_ids).includes(:active_redemption).find_each do |coupon|
+      next if coupon.active_redemption
 
       total = BigDecimal(Faker::Number.between(from: 8_000, to: 150_000)) / 100 # R$ 80,00 .. R$ 1.500,00
       discount = (total * promotion.discount_rate / 100).round(2, :half_up)
-      coupon.create_redemption!(
+      coupon.redemptions.create!(
         order_reference: "PED-#{100_000 + coupon.id}", original_total: total, discount_amount: discount,
         final_total: total - discount,
         redeemed_at: [promotion.expiration_date, today].min.beginning_of_day - Faker::Number.between(from: 1, to: 240).hours
@@ -117,3 +122,4 @@ Promotion.includes(:coupons, :promotion_approval).where(code: campaigns.pluck(:c
               counts.fetch("able", 0), counts.fetch("used", 0), counts.fetch("disable", 0), p.coupons.size)
 end
 puts "\nLogin: gerente@promotion.dev / aprovador@promotion.dev — senha: #{password}"
+puts "API de checkout: Authorization: Bearer psk_dev_local_only"

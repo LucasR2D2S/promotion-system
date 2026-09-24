@@ -49,9 +49,9 @@
   <hr>
 <% end %>
 
-<% @promotion.coupons.includes(:redemption).each do |coupon| %>
+<% @promotion.coupons.includes(:active_redemption).each do |coupon| %>
   <div id="coupon-<%= coupon.id %>">
-    <span><%= coupon.code %> (<%= t(".#{coupon.status}") %><%= " no pedido #{coupon.redemption.order_reference}" if coupon.redemption %>)</span>
+    <span><%= coupon.code %> (<%= t(".#{coupon.status}") %><%= " no pedido #{coupon.active_redemption.order_reference}" if coupon.active_redemption %>)</span>
     <% if coupon.able? %>
       <%= button_to 'Desabilitar', disable_coupon_path(coupon), form: { style: 'display: inline' } %>
     <% elsif coupon.disable? %>

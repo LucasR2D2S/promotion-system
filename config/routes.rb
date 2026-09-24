@@ -24,6 +24,16 @@ Rails.application.routes.draw do
   end
 
   resources :categories, only: [:index, :show, :new, :create, :edit, :update, :destroy]
+
+  # Checkout API for storefronts (JSON, bearer token). The order reference is part
+  # of the URL, so it may contain dots: no format suffix parsing.
+  namespace :api, defaults: { format: :json } do
+    namespace :v1 do
+      resources :quotes, only: :create
+      resources :redemptions, only: %i[create show destroy], param: :order_reference,
+                              constraints: { order_reference: %r{[^/]+} }, format: false
+    end
+  end
   # Exemplo de uma rota customizada:
   # post '/promotions/:id/generate', to: 'promotion#generate_coupons', as: :generate_coupons
 end

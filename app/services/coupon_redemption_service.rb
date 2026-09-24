@@ -12,8 +12,8 @@
 #   both requests see "able" and both redeem.
 # - Only the coupon row is locked, never the promotion: redemptions of different
 #   coupons of the same Black Friday campaign run in parallel.
-# - Unique indexes on coupon_id and order_reference are a second, database-level
-#   guarantee in case another code path ever skips the lock.
+# - Unique indexes (one *active* redemption per coupon, one redemption per order)
+#   are a second, database-level guarantee in case a code path ever skips the lock.
 #
 # Idempotency: checkouts retry on timeouts. Redeeming again with the same coupon
 # and order returns the original redemption (replayed: true) instead of failing
@@ -35,10 +35,13 @@ class CouponRedemptionService < ApplicationService
       coupon = Coupon.lock.find_by(code: @coupon_code)
       next failure(:coupon_not_found) unless coupon
 
-      if (previous = coupon.redemption)
-        next previous.order_reference == @order_reference ? success(Receipt.new(previous, true)) : failure(:coupon_used)
+      if (current = coupon.active_redemption)
+        next current.order_reference == @order_reference ? success(Receipt.new(current, true)) : failure(:coupon_used)
       end
-      next failure(:order_already_has_coupon) if CouponRedemption.exists?(order_reference: @order_reference)
+      # Order references are never reused: a cancelled order stays cancelled.
+      if (existing = CouponRedemption.find_by(order_reference: @order_reference))
+        next failure(existing.cancelled? ? :order_cancelled : :order_already_has_coupon)
+      end
 
       quote = DiscountApplicationService.call(cart_total: @cart_total, coupon:, on: @on)
       next quote if quote.failure?
@@ -55,7 +58,7 @@ class CouponRedemptionService < ApplicationService
 
   def redeem!(coupon, quote)
     coupon.update!(status: :used)
-    coupon.create_redemption!(order_reference: @order_reference, original_total: quote.original_total,
+    coupon.redemptions.create!(order_reference: @order_reference, original_total: quote.original_total,
                               discount_amount: quote.discount_amount, final_total: quote.final_total,
                               redeemed_at: Time.current)
   end

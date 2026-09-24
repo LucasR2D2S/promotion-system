@@ -44,8 +44,9 @@ class Promotion < ApplicationRecord
 
   private
 
+  # Any redemption counts, even of a cancelled order: it is still a financial record.
   def ensure_no_redeemed_coupons
-    return unless coupons.used.exists?
+    return unless CouponRedemption.joins(:coupon).where(coupons: { promotion_id: id }).exists?
 
     errors.add(:base, :has_redeemed_coupons)
     throw :abort

@@ -10,7 +10,17 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_25_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_25_000002) do
+  create_table "api_clients", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "last_used_at"
+    t.string "name", null: false
+    t.datetime "revoked_at"
+    t.string "token_digest", null: false
+    t.datetime "updated_at", null: false
+    t.index ["token_digest"], name: "index_api_clients_on_token_digest", unique: true
+  end
+
   create_table "categories", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
     t.string "code"
     t.datetime "created_at", null: false
@@ -19,6 +29,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_000000) do
   end
 
   create_table "coupon_redemptions", charset: "utf8mb4", collation: "utf8mb4_0900_ai_ci", force: :cascade do |t|
+    t.virtual "active_coupon_id", type: :bigint, as: "if((`cancelled_at` is null),`coupon_id`,NULL)", stored: true
+    t.string "cancellation_reason"
+    t.datetime "cancelled_at"
     t.bigint "coupon_id", null: false
     t.datetime "created_at", null: false
     t.decimal "discount_amount", precision: 12, scale: 2, null: false
@@ -27,7 +40,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_25_000000) do
     t.decimal "original_total", precision: 12, scale: 2, null: false
     t.datetime "redeemed_at", null: false
     t.datetime "updated_at", null: false
-    t.index ["coupon_id"], name: "index_coupon_redemptions_on_coupon_id", unique: true
+    t.index ["active_coupon_id"], name: "index_coupon_redemptions_on_active_coupon_id", unique: true
+    t.index ["coupon_id"], name: "index_coupon_redemptions_on_coupon_id_history"
     t.index ["order_reference"], name: "index_coupon_redemptions_on_order_reference", unique: true
   end
 

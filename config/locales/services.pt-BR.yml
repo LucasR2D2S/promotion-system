@@ -28,3 +28,9 @@ pt-BR:
         invalid_order_reference: 'Informe a referência do pedido (até 64 caracteres)'
         coupon_busy: 'O cupom está sendo usado em outro pedido neste momento. Tente novamente.'
         order_already_has_coupon: 'Este pedido já usou outro cupom'
+        order_cancelled: 'Este pedido foi cancelado e não pode usar cupons'
+    coupon_release:
+      errors:
+        invalid_order_reference: 'Informe a referência do pedido (até 64 caracteres)'
+        order_not_found: 'Nenhum cupom foi usado neste pedido'
+        coupon_busy: 'O cupom deste pedido está em uso neste momento. Tente novamente.'

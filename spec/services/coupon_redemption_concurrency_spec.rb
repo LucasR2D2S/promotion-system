@@ -64,6 +64,17 @@ RSpec.describe CouponRedemptionService, 'under concurrency' do
     expect(elapsed).to be < 1
   end
 
+  it 'cancels an order exactly once when two cancellations arrive together' do
+    coupon = create(:coupon, promotion:)
+    described_class.call(coupon_code: coupon.code, cart_total: '100.00', order_reference: 'PED-1')
+
+    results = race(4) { CouponReleaseService.call(order_reference: 'PED-1') }
+
+    expect(results).to all(be_success)
+    expect(results.count { !it.value.replayed }).to eq 1
+    expect(coupon.reload).to be_able
+  end
+
   it 'answers :coupon_busy when another checkout holds the coupon longer than the lock timeout' do
     coupon = create(:coupon, promotion:)
     holder = hold_lock_on(coupon, seconds: 3)

@@ -1,0 +1,6 @@
+pt-BR:
+  api:
+    errors:
+      unauthorized: 'Token de API ausente, inválido ou revogado'
+      rate_limited: 'Limite de requisições atingido. Aguarde um minuto e tente novamente.'
+      invalid_json: 'O corpo da requisição não é um JSON válido'

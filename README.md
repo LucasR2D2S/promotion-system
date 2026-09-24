@@ -4,9 +4,9 @@
 
 **A campaign and coupon engine for e-commerce, with an AI copywriter that drafts the launch e-mail.**
 
-Marketing teams create discount campaigns, a second person approves them, unique coupon codes are generated in bulk, the checkout gets a safe discount quote and redeems each coupon exactly once, and a local LLM writes the e-mail that announces the campaign. Every generated e-mail is checked against the campaign's business rules before a human sees it.
+Marketing teams create discount campaigns, a second person approves them, unique coupon codes are generated in bulk, a JSON checkout API quotes discounts and redeems each coupon exactly once (a cancelled order releases it), and a local LLM writes the e-mail that announces the campaign. Every generated e-mail is checked against the campaign's business rules before a human sees it.
 
-`Ruby 3.4` · `Rails 8.1` · `MySQL 8.4 LTS` · `Hotwire (Turbo + importmap)` · `RSpec (146 examples)` · `Docker` · `Ollama / OpenAI-compatible LLMs`
+`Ruby 3.4` · `Rails 8.1` · `MySQL 8.4 LTS` · `Hotwire (Turbo + importmap)` · `RSpec (176 examples)` · `Docker` · `Ollama / OpenAI-compatible LLMs`
 
 > The UI is in Brazilian Portuguese because the target market is Brazil. Code, tests and docs are in English.
 
@@ -17,6 +17,7 @@ Marketing teams create discount campaigns, a second person approves them, unique
 - [The problem](#the-problem)
 - [What it does](#what-it-does)
 - [AI Marketing Feature](#-ai-marketing-feature)
+- [Checkout API](#checkout-api)
 - [Architecture](#architecture)
 - [Data layer: MySQL and concurrency](#data-layer-mysql-and-concurrency)
 - [Testing strategy](#testing-strategy)
@@ -48,9 +49,10 @@ Discount campaigns sit close to revenue. Small mistakes cost money directly:
 | Approve a campaign | Approver | The approver must be a different person from the creator |
 | Generate coupons in bulk | Marketing manager | Random unique codes, batched inserts, row lock, top-up only |
 | Enable or disable a coupon | Marketing manager | A **used** coupon is final and cannot be re-enabled |
-| Quote a discount for a cart | Checkout (service) | Coupon enabled, not used, campaign approved and not expired (valid through 23:59:59 of its last day); discount rounded half-up to cents; the total never goes below zero |
-| Redeem a coupon for an order | Checkout (service) | Same rules as the quote, checked **under a row lock**; each coupon pays for exactly one order; one coupon per order; a retry of the same order returns the original redemption |
-| Delete a campaign | Marketing manager | Blocked once any of its coupons paid for an order (redemptions are financial records) |
+| Quote a discount for a cart | Checkout (API) | Coupon enabled, not used, campaign approved and not expired (valid through 23:59:59 of its last day); discount rounded half-up to cents; the total never goes below zero |
+| Redeem a coupon for an order | Checkout (API) | Same rules as the quote, checked **under a row lock**; each coupon pays for exactly one order; one coupon per order; a retry of the same order returns the original redemption |
+| Cancel an order | Checkout (API) | Releases the coupon for another order; the redemption is kept, marked cancelled (financial record); a cancelled order can't use a coupon again; cancelling twice is a no-op |
+| Delete a campaign | Marketing manager | Blocked once any of its coupons was used in an order, even a cancelled one (redemptions are financial records) |
 | Draft the campaign e-mail with AI | Marketing manager | See [AI Marketing Feature](#-ai-marketing-feature) |
 
 Coupon lifecycle:
@@ -60,8 +62,8 @@ stateDiagram-v2
     [*] --> able: CouponGenerationService
     able --> disable: admin
     disable --> able: admin
-    able --> used: CouponRedemptionService
-    used --> [*]
+    able --> used: POST /redemptions
+    used --> able: DELETE /redemptions/:order (order cancelled)
 ```
 
 ---
@@ -126,6 +128,56 @@ Everything that fails is mapped to an actionable message. For example, a model t
 
 ---
 
+## Checkout API
+
+A JSON API for storefronts and apps (`/api/v1`). Every request carries a bearer token issued per client. The **order reference is the idempotency key**: a checkout can retry any call after a timeout without double-charging a coupon. (Coupon codes are random; to try the example below, copy one from a campaign page.)
+
+| Endpoint | Purpose | Success |
+|---|---|---|
+| `POST /api/v1/quotes` | Discount for a cart, without consuming the coupon | `200` |
+| `POST /api/v1/redemptions` | Redeem a coupon for an order | `201`, or `200` + `Idempotent-Replayed: true` on a retry |
+| `GET /api/v1/redemptions/:order_reference` | Coupon status of an order | `200` |
+| `DELETE /api/v1/redemptions/:order_reference` | Order cancelled: release the coupon | `200` (idempotent) |
+
+```bash
+curl -X POST http://localhost:3000/api/v1/redemptions \
+  -H "Authorization: Bearer psk_dev_local_only" -H "Content-Type: application/json" \
+  -d '{"coupon_code": "CYBER25-CHTA-433H", "cart_total": "399.90", "order_reference": "PED-1042"}'
+```
+
+```json
+{
+  "order_reference": "PED-1042",
+  "coupon_code": "CYBER25-CHTA-433H",
+  "status": "active",
+  "original_total": "399.90",
+  "discount_amount": "99.98",
+  "final_total": "299.92",
+  "currency": "BRL",
+  "redeemed_at": "2026-09-24T14:08:10Z",
+  "cancelled_at": null,
+  "cancellation_reason": null
+}
+```
+
+Design decisions:
+
+- **Money as strings** (`"299.92"`) with fixed separators: JSON numbers become floats in most clients, and the app's pt-BR locale would otherwise format `"1.500,00"`. A smoke test against the running app caught exactly that bug before release.
+- **Stable error contract.** Clients branch on `error.code`; `error.message` is for display (pt-BR):
+
+  | HTTP | `error.code` |
+  |---|---|
+  | 400 | `invalid_json` |
+  | 401 | `unauthorized` (missing, unknown or revoked token) |
+  | 404 | `coupon_not_found`, `order_not_found` |
+  | 409 | `order_already_has_coupon`, `order_cancelled`, `coupon_busy` (with `Retry-After: 1`) |
+  | 422 | `coupon_used`, `coupon_disabled`, `promotion_expired`, `promotion_not_approved`, `invalid_cart_total`, `invalid_order_reference` |
+  | 429 | `rate_limited` |
+
+- **Tokens stored as SHA-256 digests**, shown once at creation (`bin/rails api:clients:create NAME="Loja virtual"`, plus `list` and `revoke`). A database leak doesn't leak working credentials. The tokens are random, so an unsalted digest is safe and can be looked up directly (bcrypt's salted hashes can't).
+- **Rate limit per client** (Rails 8 `rate_limit`, default 120/min): quotes reveal whether a code exists, so without a limit they could be used to enumerate coupon codes.
+- In development the seeds create a client with the token `psk_dev_local_only`.
+
 ## Architecture
 
 ```mermaid
@@ -134,16 +186,19 @@ flowchart LR
     AP[Approver] --> UI
     UI["Rails 8.1 · Hotwire<br/>thin controllers"] --> CGS[CouponGenerationService]
     UI --> AIS[AiMarketingCopyGeneratorService]
-    CO["Checkout<br/>(API on roadmap)"] -.-> DAS[DiscountApplicationService]
-    CO -.-> CRS[CouponRedemptionService]
+    CO[Storefront / app] -->|"Bearer token<br/>/api/v1"| API["Checkout API<br/>rate-limited"]
+    API --> DAS[DiscountApplicationService]
+    API --> CRS[CouponRedemptionService]
+    API --> REL[CouponReleaseService]
     CRS --> DAS
+    REL --> DB
     CGS --> DB[(MySQL 8.4<br/>InnoDB)]
     DAS --> DB
     CRS --> DB
     AIS --> LLM[LlmClient] --> OL["Ollama · qwen2.5:7b<br/>or Groq / OpenAI"]
 ```
 
-**Business logic lives in service objects, not in controllers.** Controllers only handle HTTP (params in, redirect or render out), so the same rules can be reused by a checkout API, a background job or the console.
+**Business logic lives in service objects, not in controllers.** Controllers only handle HTTP (params in, redirect, render or JSON out), which is why the checkout API was a thin layer over services that already existed and were already tested.
 
 ```
 app/services/
@@ -152,6 +207,7 @@ app/services/
 ├── coupon_generation_service.rb         # bulk, unique, locked, idempotent
 ├── discount_application_service.rb      # read-only BigDecimal quote
 ├── coupon_redemption_service.rb         # locked, idempotent, exactly-once use
+├── coupon_release_service.rb            # order cancelled: release the coupon
 ├── ai_marketing_copy_generator_service.rb
 └── llm_client.rb                        # any OpenAI-compatible API
 lib/
@@ -182,13 +238,15 @@ Guarantees that live in the schema and the code rather than in configuration:
 - **Coupon redemption locks only the coupon row** (`SELECT … FOR UPDATE`) and re-checks every rule *after* the lock is held. Checking first and writing later is the window through which one coupon would pay for two orders. The campaign row is never locked, so a Black Friday's coupons are redeemed in parallel (a spec proves that a lock on one coupon doesn't delay another). If the row stays busy past the lock timeout, the checkout gets a retryable `:coupon_busy`.
 - **Two independent guards against double spending, verified by removing each one** against real MySQL threads racing to redeem the same coupon:
 
-  | Row lock | Unique index on `coupon_redemptions.coupon_id` | Result |
+  | Row lock | Unique index (one *active* redemption per coupon) | Result |
   |---|---|---|
   | ✅ | ✅ | exactly one redemption (shipped) |
   | ❌ | ✅ | still exactly one: the index rejects the second insert |
   | ✅ | ❌ | still exactly one: the lock serializes the checkouts |
   | ❌ | ❌ | **the same coupon paid for several orders in 3 out of 3 runs** |
 
+- **A partial unique index, emulated.** Cancelling an order must free the coupon while keeping the redemption row (it is a financial record). The rule is "unique among *active* redemptions", but MySQL has no partial indexes (`UNIQUE … WHERE cancelled_at IS NULL`). A stored generated column, `active_coupon_id = IF(cancelled_at IS NULL, coupon_id, NULL)`, carries a `UNIQUE` index; MySQL allows many `NULL`s, so cancelled rows don't count. The guarantee stays in the database: a spec inserts a second active redemption directly and gets `RecordNotUnique`. The double-spend experiments above were re-run against this index with the same results.
+- **Release uses the same lock order as redemption** (the coupon row first), so a cancellation and a new redemption of the same coupon are serialized and can't deadlock. Two simultaneous cancellations of the same order: one does the work, the other gets the idempotent reply.
 - **Idempotent redemption.** Checkouts retry on timeouts. The same coupon and order returns the original redemption (`replayed: true`, original amounts) instead of a false "coupon already used" for an order that went through.
 - **Foreign keys are enforced**, with `dependent: :destroy` where it applies. Migrating off SQLite exposed deletes that would have failed in production.
 - **`DECIMAL(5,2)` discount rates.** The original column was `DECIMAL(10,0)`, which silently stored **12.5% as 12%**. A regression spec keeps it fixed.
@@ -198,13 +256,14 @@ Guarantees that live in the schema and the code rather than in configuration:
 
 ## Testing strategy
 
-**146 examples, 0 failures**, running in about 15 s against a real MySQL database.
+**176 examples, 0 failures**, running in about 17 s against a real MySQL database.
 
 | Layer | Examples | Highlights |
 |---|---|---|
-| Services | 87 | Discount math, coupon generation and redemption (including real multi-threaded races), AI copy validation, HTTP client contract |
+| Services | 96 | Discount math, coupon generation, redemption and release (including real multi-threaded races), AI copy validation, HTTP client contract |
+| Requests (API) | 17 | Auth, status codes and error contract, idempotent replays, cancellation, rate limit |
 | Features (Capybara) | 39 | End-to-end admin flows, including AI generation with a stubbed LLM |
-| Models | 16 | Validations, associations, cascading deletes under enforced foreign keys, protection of redeemed coupons |
+| Models | 20 | Validations, associations, cascading deletes under enforced foreign keys, protection of redeemed coupons, API token digests |
 | Tooling | 4 | The benchmark harness itself |
 
 What makes the suite trustworthy, beyond the count:
@@ -250,6 +309,8 @@ On first boot the entrypoint creates the database, runs the migrations and loads
 | `gerente@promotion.dev` | `senha123` | Marketing manager |
 | `aprovador@promotion.dev` | `senha123` | Approver |
 
+The checkout API is available with `Authorization: Bearer psk_dev_local_only` (see [Checkout API](#checkout-api)).
+
 **Everyday commands:**
 
 ```bash
@@ -264,6 +325,9 @@ docker compose exec web bin/rails db:seed
 
 # Compare LLMs on the copywriting task
 docker compose exec web bin/rails ai:benchmark MODELS=llama3.2,qwen2.5:7b N=12
+
+# Issue a checkout API token for a storefront (shown once)
+docker compose exec web bin/rails api:clients:create NAME="Loja virtual"
 
 # Health check (for load balancers and uptime monitors)
 curl http://localhost:3000/up
@@ -290,6 +354,7 @@ All settings come from environment variables (12-factor). The defaults work loca
 | `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME` | set by compose | MySQL connection |
 | `DB_LOCK_WAIT_TIMEOUT` | `5` | InnoDB lock wait, in seconds |
 | `RAILS_MAX_THREADS` | `3` | Puma threads; the DB pool follows it |
+| `API_RATE_LIMIT_PER_MINUTE` | `120` | Checkout API requests per client per minute |
 
 ---
 
@@ -302,13 +367,14 @@ This project started as a Rails 6.1 / Ruby 2.7 / SQLite app with a failing test 
 3. **Ruby 2.7 → 3.4, Rails 6.1 → 8.1.** Both old versions were end-of-life. Webpacker, Turbolinks and Node were replaced by importmap, Turbo and Propshaft. Config was regenerated from a fresh Rails 8.1 app, `link_to method:` became real forms (`button_to`), and Devise was configured for Turbo (422/303).
 4. **Service objects** for coupon generation and discount quoting, with concurrency measured, not assumed.
 5. **Exactly-once coupon redemption** with a row lock, idempotent retries and a financial record per order, verified by removing each guard.
-6. **Business-oriented seeds** that are deterministic and idempotent, only run in development, and whose dates stay valid over time.
-7. **An AI copywriter** with guardrails, a benchmark-driven model choice, and secret handling.
+6. **Checkout API and order cancellation.** JSON endpoints over the existing services, and cancellation that frees the coupon while keeping the record, enforced by an emulated partial unique index.
+7. **Business-oriented seeds** that are deterministic and idempotent, only run in development, and whose dates stay valid over time.
+8. **An AI copywriter** with guardrails, a benchmark-driven model choice, and secret handling.
 
 ## Roadmap and known limitations
 
-- **Checkout API.** Quote and redemption exist as services. The next step is exposing them as JSON endpoints for the storefront, with token authentication and the order reference as the idempotency key.
-- **Order cancellation.** A refunded order should release its coupon, or not, depending on the business rule. Redemptions are currently final.
+- **Per-client audit trail.** Redemptions don't record which API client created them yet; recording it would allow restricting reads and cancellations to the client that owns the order.
+- **OpenAPI description** of the checkout API, to generate client SDKs and docs.
 - **Asynchronous AI generation.** Generation currently runs inside the request (about 6 s locally). With slower providers it belongs in a background job, with the result streamed back through Turbo Streams.
 - **Semantic checks for AI copy.** Rule-based validation catches format and policy violations, not every hallucination (for example, implying a store-wide sale when only some categories are discounted). Options: an LLM-as-judge pass, or checking the categories mentioned against the campaign data.
 - **Production image and deploy.** Add a production Docker stage (precompiled assets, non-root user) and a deploy pipeline.
