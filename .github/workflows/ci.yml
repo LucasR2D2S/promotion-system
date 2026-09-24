@@ -16,7 +16,7 @@ permissions:
 jobs:
   test:
     name: Tests (RSpec + MySQL 8.4)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinned: ubuntu-latest moves to 26.04 on 2026-10-19
     timeout-minutes: 15
 
     services:
@@ -62,7 +62,7 @@ jobs:
 
   security:
     name: Security (Brakeman + bundler-audit)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # pinned: ubuntu-latest moves to 26.04 on 2026-10-19
     timeout-minutes: 10
 
     steps:

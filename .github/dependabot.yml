@@ -6,6 +6,11 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      # json 3.0 changed JSON.parse and breaks ActiveSupport::JSON.decode (sessions)
+      # on Rails 8.1.3; it is pinned in the Gemfile. Remove once Rails supports it.
+      - dependency-name: json
+        versions: [">= 3"]
 
   - package-ecosystem: github-actions
     directory: "/"
