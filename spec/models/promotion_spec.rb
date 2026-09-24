@@ -36,6 +36,26 @@ describe Promotion do
     end
   end
 
+  context '#destroy' do
+    it 'removes coupons, category links and approval (foreign keys are enforced)' do
+      creator = User.create!(email: 'joao@email.com', password: '123456')
+      approver = User.create!(email: 'henrique@email.com', password: '123456')
+      category = Category.create!(name: 'Jogos', code: 'GAME')
+      promotion = Promotion.create!(name: 'Natal', description: 'Promoção de Natal',
+                                    code: 'NATAL10', discount_rate: 10, coupon_quantity: 2,
+                                    expiration_date: '22/12/2033', user: creator,
+                                    categories: [category])
+      promotion.generate_coupons!
+      promotion.approve!(approver)
+
+      expect { promotion.destroy! }.to change(Promotion, :count).by(-1)
+        .and change(Coupon, :count).by(-2)
+        .and change(ProductCategoryPromotion, :count).by(-1)
+        .and change(PromotionApproval, :count).by(-1)
+      expect(Category.exists?(category.id)).to be true
+    end
+  end
+
   context '#approve!' do
 
     it 'should generate a PromotionApproval object' do

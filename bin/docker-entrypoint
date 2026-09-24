@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+
+# A stale PID file from a killed container prevents Puma from booting.
+rm -f /app/tmp/pids/server.pid
+
+# The bundle volume may be stale after Gemfile changes: install only if needed.
+bundle check >/dev/null 2>&1 || bundle install
+
+# Creates the database on first boot, runs pending migrations afterwards.
+if [ "$1" = "bin/rails" ] && [ "$2" = "server" ]; then
+  bin/rails db:prepare
+fi
+
+exec "$@"

@@ -1,5 +1,6 @@
 class PromotionsController < ApplicationController
   before_action :authenticate_user!
+  before_action :load_categories, only: [:new, :create, :edit, :update]
 
   def index
     @promotions = Promotion.all
@@ -11,7 +12,6 @@ class PromotionsController < ApplicationController
   
   def new
     @promotion = Promotion.new
-    @categories = Categories.all
   end
 
   def create
@@ -21,8 +21,7 @@ class PromotionsController < ApplicationController
     if @promotion.save
       redirect_to @promotion
     else
-      @categories = Categories.all
-      render :new
+      render :new, status: :unprocessable_entity
     end
   end
 
@@ -35,7 +34,7 @@ class PromotionsController < ApplicationController
       if @promotion.update(promotion_params)
         redirect_to @promotion, notice: t('.success')
       else
-        render 'edit', notice: t('.error')
+        render :edit, status: :unprocessable_entity
       end
   end
 
@@ -59,10 +58,14 @@ class PromotionsController < ApplicationController
   end
 
   def search
-    @promotions = Promotion.where('name like ?', params[:q])
+    @promotions = Promotion.where('name LIKE ?', "%#{Promotion.sanitize_sql_like(params[:q].to_s)}%")
   end
 
   private
+    def load_categories
+      @categories = Category.order(:name)
+    end
+
     def promotion_params
       params.require(:promotion).permit(:name, :description, :code, :discount_rate, :coupon_quantity, :expiration_date, category_ids: [])
     end
