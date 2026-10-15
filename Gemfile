@@ -49,5 +49,5 @@ group :test do
   gem "capybara"
   gem "shoulda-matchers", "~> 8.0"
   # Blocks real HTTP in specs: AI calls are stubbed, never billed or flaky
-  gem "webmock", "~> 3.26"
+  gem "webmock", "~> 3.29"
 end
