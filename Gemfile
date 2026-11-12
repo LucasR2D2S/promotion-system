@@ -2,7 +2,7 @@ source "https://rubygems.org"
 
 ruby file: ".ruby-version"
 
-gem "rails", "~> 8.1.3"
+gem "rails", "~> 8.1.4"
 # activesupport depends on an unbounded "json"; json 3.0 changed JSON.parse and
 # breaks ActiveSupport::JSON.decode (cookies/sessions) on Rails 8.1.3.
 gem "json", "~> 2.21"
